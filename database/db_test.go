@@ -76,7 +76,7 @@ func TestSetGet(t *testing.T) {
 	path := "testsetget.db"
 	defer os.Remove(path)
 
-	key := []byte("test")
+	key := "test"
 	value := []byte("value")
 
 	db, err := database.Open(path)
@@ -101,15 +101,15 @@ func TestSetGet(t *testing.T) {
 
 func TestSetGetMany(t *testing.T) {
 	type Test struct {
-		key   []byte
+		key   string
 		value []byte
 	}
 	tests := []Test{
-		{key: []byte("test1"), value: []byte("value1")},
-		{key: []byte("test2"), value: []byte("value2")},
-		{key: []byte("test3"), value: []byte("value3")},
-		{key: []byte("test4"), value: []byte("value4")},
-		{key: []byte("test5"), value: []byte("other value")},
+		{key: "test1", value: []byte("value1")},
+		{key: "test2", value: []byte("value2")},
+		{key: "test3", value: []byte("value3")},
+		{key: "test4", value: []byte("value4")},
+		{key: "test5", value: []byte("other value")},
 	}
 	path := "testsetgetmany.db"
 	defer os.Remove(path)
@@ -131,5 +131,64 @@ func TestSetGetMany(t *testing.T) {
 		if !bytes.Equal(val, test.value) {
 			t.Errorf("got wrong value (%s), want (%s)", val, test.value)
 		}
+	}
+}
+
+func TestDelete(t *testing.T) {
+	path := "testdelete.db"
+	defer os.Remove(path)
+
+	key := "test"
+	value := []byte("value")
+
+	db, err := database.Open(path)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	defer db.Close()
+
+	err = db.Set(key, value)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	db.Delete(key)
+
+	_, err = db.Get(key)
+	if err == nil {
+		t.Errorf("expected error: %s, got nil", database.ErrKeyNotFound)
+	}
+}
+
+func TestPersistWork(t *testing.T) {
+	path := "testpersist.db"
+	defer os.Remove(path)
+
+	key := "test"
+	value := []byte("value")
+
+	db, err := database.Open(path)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+
+	err = db.Set(key, value)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	db.Close()
+
+	db2, err := database.Open(path)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	defer db2.Close()
+
+	val, err := db2.Get(key)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+
+	if !bytes.Equal(val, value) {
+		t.Errorf("got wrong value (%s), want (%s)", val, value)
 	}
 }

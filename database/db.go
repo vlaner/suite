@@ -1,18 +1,16 @@
 package database
 
 import (
-	"bufio"
 	"bytes"
+	"encoding/gob"
 	"errors"
-	"fmt"
 	"io"
-	"log"
 	"os"
 	"sync"
 )
 
 var ENTRY_SCHEMA = "%s:%s\n"
-var SUITE_DB_MAGIC = []byte("SUITEDB\n")
+var SUITE_DB_MAGIC = []byte("SUITEDB")
 
 var (
 	ErrKeyNotFound  = errors.New("key not found")
@@ -23,6 +21,7 @@ type Database struct {
 	path       string
 	fileHandle *os.File
 	mu         sync.RWMutex
+	data       map[string][]byte
 }
 
 func Open(path string) (*Database, error) {
@@ -35,6 +34,7 @@ func Open(path string) (*Database, error) {
 		path:       path,
 		fileHandle: handle,
 		mu:         sync.RWMutex{},
+		data:       make(map[string][]byte),
 	}
 
 	file, err := handle.Stat()
@@ -58,40 +58,55 @@ func Open(path string) (*Database, error) {
 		if !bytes.Equal(magicBuf, SUITE_DB_MAGIC) {
 			return db, ErrInvalidMagic
 		}
+		d := gob.NewDecoder(handle)
+		err := d.Decode(&db.data)
+		if !errors.Is(err, io.EOF) {
+			return db, err
+		}
 	}
 
 	return db, nil
 }
 
 func (db *Database) Close() error {
-	return db.fileHandle.Close()
-}
+	defer db.fileHandle.Close()
+	db.fileHandle.Seek(int64(len(SUITE_DB_MAGIC)), 0)
 
-func (db *Database) Set(key, value []byte) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	b := new(bytes.Buffer)
+	e := gob.NewEncoder(b)
+	err := e.Encode(db.data)
 
-	v := fmt.Sprintf(ENTRY_SCHEMA, key, value)
-	_, err := db.fileHandle.Write([]byte(v))
-
+	if err != nil {
+		return err
+	}
+	_, err = db.fileHandle.Write(b.Bytes())
 	return err
 }
 
-func (db *Database) Get(key []byte) ([]byte, error) {
+func (db *Database) Set(key string, value []byte) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.fileHandle.Seek(int64(len(SUITE_DB_MAGIC)), 0)
-	r := bufio.NewReader(db.fileHandle)
-	for {
-		line, _, err := r.ReadLine()
-		log.Println(line)
-		if err != nil {
-			break
-		}
-		if bytes.Equal(line[:len(key)], key) {
-			return line[len(key)+1:], nil
-		}
+
+	db.data[key] = value
+
+	return nil
+}
+
+func (db *Database) Get(key string) ([]byte, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	val, exists := db.data[key]
+	if !exists {
+		return nil, ErrKeyNotFound
 	}
 
-	return nil, ErrKeyNotFound
+	return val, nil
+}
+
+func (db *Database) Delete(key string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	delete(db.data, key)
 }
