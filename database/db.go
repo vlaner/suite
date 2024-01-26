@@ -55,9 +55,11 @@ func Open(path string) (*Database, error) {
 				return db, err
 			}
 		}
+
 		if !bytes.Equal(magicBuf, SUITE_DB_MAGIC) {
 			return db, ErrInvalidMagic
 		}
+
 		d := gob.NewDecoder(handle)
 		err := d.Decode(&db.data)
 		if !errors.Is(err, io.EOF) {
@@ -75,10 +77,10 @@ func (db *Database) Close() error {
 	b := new(bytes.Buffer)
 	e := gob.NewEncoder(b)
 	err := e.Encode(db.data)
-
 	if err != nil {
 		return err
 	}
+
 	_, err = db.fileHandle.Write(b.Bytes())
 	return err
 }
