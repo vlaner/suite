@@ -1,12 +1,7 @@
 package database
 
 import (
-	"bytes"
-	"encoding/gob"
 	"errors"
-	"io"
-	"os"
-	"sync"
 )
 
 var ENTRY_SCHEMA = "%s:%s\n"
@@ -17,98 +12,70 @@ var (
 	ErrInvalidMagic = errors.New("invalid file magic")
 )
 
-type Database struct {
-	path       string
-	fileHandle *os.File
-	mu         sync.RWMutex
-	data       map[string][]byte
+type DatabaseEntry struct {
+	key     []byte
+	value   []byte
+	deleted bool
 }
 
-func Open(path string) (*Database, error) {
-	handle, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
+type Database struct {
+	dirPath  string
+	WAL      *WalFile
+	MemTable *MemoryTable
+}
+
+func Open(dirPath string) (*Database, error) {
+	var err error
+	wal, err := NewWal(dirPath)
 	if err != nil {
 		return nil, err
 	}
 
+	memTable := NewMemoryTable()
+	for {
+		entry, err := wal.ReadNextEntry()
+		if err != nil {
+			break
+		}
+		memTable.Set(entry.key, entry.value)
+		if entry.deleted {
+			memTable.Delete(entry.key)
+		}
+	}
+
 	db := &Database{
-		path:       path,
-		fileHandle: handle,
-		mu:         sync.RWMutex{},
-		data:       make(map[string][]byte),
+		dirPath:  dirPath,
+		WAL:      wal,
+		MemTable: memTable,
 	}
 
-	file, err := handle.Stat()
-	if err != nil {
-		return db, err
-	}
-
-	if file.Size() == 0 {
-		_, err := handle.Write(SUITE_DB_MAGIC)
-		if err != nil {
-			return db, err
-		}
-	} else {
-		magicBuf := make([]byte, len(SUITE_DB_MAGIC))
-		_, err = handle.Read(magicBuf)
-		if err != nil {
-			if !errors.Is(err, io.EOF) {
-				return db, err
-			}
-		}
-
-		if !bytes.Equal(magicBuf, SUITE_DB_MAGIC) {
-			return db, ErrInvalidMagic
-		}
-
-		d := gob.NewDecoder(handle)
-		err := d.Decode(&db.data)
-		if !errors.Is(err, io.EOF) {
-			return db, err
-		}
-	}
-
-	return db, nil
+	return db, err
 }
 
 func (db *Database) Close() error {
-	defer db.fileHandle.Close()
-	db.fileHandle.Seek(int64(len(SUITE_DB_MAGIC)), 0)
-
-	b := new(bytes.Buffer)
-	e := gob.NewEncoder(b)
-	err := e.Encode(db.data)
-	if err != nil {
-		return err
-	}
-
-	_, err = db.fileHandle.Write(b.Bytes())
-	return err
+	return db.WAL.Close()
 }
 
-func (db *Database) Set(key string, value []byte) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	db.data[key] = value
-
+func (db *Database) Set(key []byte, value []byte) error {
+	db.WAL.Set(key, value)
+	db.MemTable.Set(key, value)
 	return nil
 }
 
-func (db *Database) Get(key string) ([]byte, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	val, exists := db.data[key]
-	if !exists {
-		return nil, ErrKeyNotFound
+func (db *Database) Get(key []byte) (*DatabaseEntry, error) {
+	entry := db.MemTable.Get(key)
+	if entry != nil {
+		return &DatabaseEntry{
+			key:     key,
+			value:   entry.value,
+			deleted: entry.deleted,
+		}, nil
 	}
 
-	return val, nil
+	return nil, ErrKeyNotFound
 }
 
-func (db *Database) Delete(key string) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
-	delete(db.data, key)
+func (db *Database) Delete(key []byte) {
+	db.WAL.Delete(key)
+	db.MemTable.Delete(key)
 }

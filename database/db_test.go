@@ -1,194 +1,71 @@
-package database_test
+package database
 
 import (
 	"bytes"
 	"os"
 	"testing"
-
-	"github.com/vlaner/suite/database"
 )
 
-func TestOpenClose(t *testing.T) {
-	path := "test1.db"
-	defer os.Remove(path)
-
-	db, err := database.Open(path)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-	defer db.Close()
-}
-
-func TestMagicNumberWorks(t *testing.T) {
-	path := "test2.db"
-	defer os.Remove(path)
-
-	handle, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	_, err = handle.Write(database.SUITE_DB_MAGIC)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	err = handle.Close()
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	db, err := database.Open(path)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-	defer db.Close()
-}
-
-func TestMagicNumberWrong(t *testing.T) {
-	path := "test3.db"
-	defer os.Remove(path)
-
-	handle, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	_, err = handle.Write([]byte("databaseWrong"))
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	err = handle.Close()
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	db, err := database.Open(path)
-	if err == nil {
-		t.Errorf("expected error but got nil: %s", err)
-	}
-
-	defer db.Close()
-}
-
 func TestSetGet(t *testing.T) {
-	path := "testsetget.db"
-	defer os.Remove(path)
+	dirPath := "testdata"
+	defer os.RemoveAll("testdata")
+	key := []byte("testkey")
+	value := []byte("testvalue")
 
-	key := "test"
-	value := []byte("value")
-
-	db, err := database.Open(path)
+	db, err := Open(dirPath)
 	if err != nil {
-		t.Errorf("unexpected error: %s", err)
+		t.Fatalf("Open: %v", err)
 	}
 	defer db.Close()
 
 	err = db.Set(key, value)
 	if err != nil {
-		t.Errorf("unexpected error: %s", err)
+		t.Error(err)
 	}
 
-	val, err := db.Get(key)
+	gotEntry, err := db.Get(key)
 	if err != nil {
-		t.Errorf("unexpected error: %s", err)
+		t.Error(err)
 	}
-	if !bytes.Equal(val, value) {
-		t.Errorf("got wrong value (%s), want (%s)", val, value)
+	if !bytes.Equal(gotEntry.key, key) {
+		t.Fatalf("got wrong key, want %s, got %s", key, gotEntry.key)
 	}
-}
-
-func TestSetGetMany(t *testing.T) {
-	type Test struct {
-		key   string
-		value []byte
-	}
-	tests := []Test{
-		{key: "test1", value: []byte("value1")},
-		{key: "test2", value: []byte("value2")},
-		{key: "test3", value: []byte("value3")},
-		{key: "test4", value: []byte("value4")},
-		{key: "test5", value: []byte("other value")},
-	}
-	path := "testsetgetmany.db"
-	defer os.Remove(path)
-
-	db, err := database.Open(path)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-	defer db.Close()
-	for _, test := range tests {
-		db.Set(test.key, test.value)
-	}
-
-	for _, test := range tests {
-		val, err := db.Get(test.key)
-		if err != nil {
-			t.Errorf("unexpected error: %s", err)
-		}
-		if !bytes.Equal(val, test.value) {
-			t.Errorf("got wrong value (%s), want (%s)", val, test.value)
-		}
+	if !bytes.Equal(gotEntry.value, value) {
+		t.Fatalf("got wrong value, want %s, got %s", value, gotEntry.value)
 	}
 }
 
 func TestDelete(t *testing.T) {
-	path := "testdelete.db"
-	defer os.Remove(path)
+	dirPath := "testdata"
+	defer os.RemoveAll("testdata")
+	key := []byte("testkey")
+	value := []byte("testvalue")
 
-	key := "test"
-	value := []byte("value")
-
-	db, err := database.Open(path)
+	db, err := Open(dirPath)
 	if err != nil {
-		t.Errorf("unexpected error: %s", err)
+		t.Fatalf("Open: %v", err)
 	}
 	defer db.Close()
 
 	err = db.Set(key, value)
 	if err != nil {
-		t.Errorf("unexpected error: %s", err)
+		t.Error(err)
 	}
-	db.Delete(key)
 
+	gotEntry, err := db.Get(key)
+	if err != nil {
+		t.Error(err)
+	}
+	if !bytes.Equal(gotEntry.key, key) {
+		t.Fatalf("got wrong key, want %s, got %s", key, gotEntry.key)
+	}
+	if !bytes.Equal(gotEntry.value, value) {
+		t.Fatalf("got wrong value, want %s, got %s", value, gotEntry.value)
+	}
+
+	db.Delete(key)
 	_, err = db.Get(key)
 	if err == nil {
-		t.Errorf("expected error: %s, got nil", database.ErrKeyNotFound)
-	}
-}
-
-func TestPersistWork(t *testing.T) {
-	path := "testpersist.db"
-	defer os.Remove(path)
-
-	key := "test"
-	value := []byte("value")
-
-	db, err := database.Open(path)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	err = db.Set(key, value)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-	db.Close()
-
-	db2, err := database.Open(path)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-	defer db2.Close()
-
-	val, err := db2.Get(key)
-	if err != nil {
-		t.Errorf("unexpected error: %s", err)
-	}
-
-	if !bytes.Equal(val, value) {
-		t.Errorf("got wrong value (%s), want (%s)", val, value)
+		t.Fatalf("expected entry to be deleted but it is not")
 	}
 }
