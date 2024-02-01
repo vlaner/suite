@@ -2,9 +2,27 @@ package database
 
 import (
 	"encoding/binary"
+	"io"
 	"os"
 	"path/filepath"
 )
+
+type WalReadWriter struct {
+	r   io.ReadWriter
+	err error
+}
+
+func (wr *WalReadWriter) read(data any) {
+	if wr.err == nil {
+		wr.err = binary.Read(wr.r, binary.LittleEndian, data)
+	}
+}
+
+func (wr *WalReadWriter) write(data any) {
+	if wr.err == nil {
+		wr.err = binary.Write(wr.r, binary.LittleEndian, data)
+	}
+}
 
 type WalFile struct {
 	path       string
@@ -31,30 +49,24 @@ func NewWal(dirPath string) (*WalFile, error) {
 }
 
 func (w *WalFile) ReadNextEntry() (*MemoryTableEntry, error) {
+	rw := WalReadWriter{r: w.fileHandle, err: nil}
 	var keyLenBuf uint32
 	var deletedBuf bool
 
-	if err := binary.Read(w.fileHandle, binary.LittleEndian, &keyLenBuf); err != nil {
-		return nil, err
-	}
+	rw.read(&keyLenBuf)
 	keyBuf := make([]byte, keyLenBuf)
-
-	if err := binary.Read(w.fileHandle, binary.LittleEndian, &deletedBuf); err != nil {
-		return nil, err
-	}
+	rw.read(&deletedBuf)
 
 	if !deletedBuf {
 		var valueLenBuf uint32
-		if err := binary.Read(w.fileHandle, binary.LittleEndian, &valueLenBuf); err != nil {
-			return nil, err
-		}
+		rw.read(&valueLenBuf)
 		valueBuf := make([]byte, valueLenBuf)
 
-		if err := binary.Read(w.fileHandle, binary.LittleEndian, &keyBuf); err != nil {
-			return nil, err
-		}
-		if err := binary.Read(w.fileHandle, binary.LittleEndian, &valueBuf); err != nil {
-			return nil, err
+		rw.read(&keyBuf)
+		rw.read(&valueBuf)
+
+		if rw.err != nil {
+			return nil, rw.err
 		}
 
 		return &MemoryTableEntry{
@@ -63,8 +75,9 @@ func (w *WalFile) ReadNextEntry() (*MemoryTableEntry, error) {
 			deleted: deletedBuf,
 		}, nil
 	} else {
-		if err := binary.Read(w.fileHandle, binary.LittleEndian, &keyBuf); err != nil {
-			return nil, err
+		rw.read(&keyBuf)
+		if rw.err != nil {
+			return nil, rw.err
 		}
 
 		return &MemoryTableEntry{
@@ -79,16 +92,24 @@ func (w *WalFile) Close() error {
 	return w.fileHandle.Close()
 }
 
-func (w *WalFile) Set(key, value []byte) {
-	binary.Write(w.fileHandle, binary.LittleEndian, int32(len(key)))
-	binary.Write(w.fileHandle, binary.LittleEndian, false)
-	binary.Write(w.fileHandle, binary.LittleEndian, int32(len(value)))
-	binary.Write(w.fileHandle, binary.LittleEndian, key)
-	binary.Write(w.fileHandle, binary.LittleEndian, value)
+func (w *WalFile) Set(key, value []byte) error {
+	rw := WalReadWriter{r: w.fileHandle, err: nil}
+
+	rw.write(int32(len(key)))
+	rw.write(false)
+	rw.write(int32(len(value)))
+	rw.write(key)
+	rw.write(value)
+
+	return rw.err
 }
 
-func (w *WalFile) Delete(key []byte) {
-	binary.Write(w.fileHandle, binary.LittleEndian, int32(len(key)))
-	binary.Write(w.fileHandle, binary.LittleEndian, true)
-	binary.Write(w.fileHandle, binary.LittleEndian, key)
+func (w *WalFile) Delete(key []byte) error {
+	rw := WalReadWriter{r: w.fileHandle, err: nil}
+
+	rw.write(int32(len(key)))
+	rw.write(true)
+	rw.write(key)
+
+	return rw.err
 }

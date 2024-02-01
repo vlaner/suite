@@ -63,7 +63,10 @@ func TestDelete(t *testing.T) {
 		t.Fatalf("got wrong value, want %s, got %s", value, gotEntry.value)
 	}
 
-	db.Delete(key)
+	err = db.Delete(key)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
 	_, err = db.Get(key)
 	if err == nil {
 		t.Fatalf("expected entry to be deleted but it is not")

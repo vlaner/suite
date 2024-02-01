@@ -32,7 +32,10 @@ func TestWalSets(t *testing.T) {
 		t.Error("unexpected nil file")
 	}
 
-	wal.Set(key, value)
+	err = wal.Set(key, value)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
 	wal.Close()
 
 	wal, err = NewWal("./testdata")
@@ -70,8 +73,14 @@ func TestWalDeletes(t *testing.T) {
 		t.Error("unexpected nil file")
 	}
 
-	wal.Set(key, value)
-	wal.Delete(key)
+	err = wal.Set(key, value)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	err = wal.Delete(key)
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
 	wal.Close()
 
 	wal, err = NewWal("./testdata")
@@ -81,6 +90,7 @@ func TestWalDeletes(t *testing.T) {
 	if wal == nil {
 		t.Error("unexpected nil file")
 	}
+	defer wal.Close()
 	entry, err := wal.ReadNextEntry()
 	if err != nil {
 		t.Error(err)

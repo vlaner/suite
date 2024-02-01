@@ -57,7 +57,10 @@ func (db *Database) Close() error {
 }
 
 func (db *Database) Set(key []byte, value []byte) error {
-	db.WAL.Set(key, value)
+	if err := db.WAL.Set(key, value); err != nil {
+		return err
+	}
+
 	db.MemTable.Set(key, value)
 	return nil
 }
@@ -75,7 +78,12 @@ func (db *Database) Get(key []byte) (*DatabaseEntry, error) {
 	return nil, ErrKeyNotFound
 }
 
-func (db *Database) Delete(key []byte) {
-	db.WAL.Delete(key)
-	db.MemTable.Delete(key)
+func (db *Database) Delete(key []byte) error {
+	if err := db.WAL.Delete(key); err != nil {
+		return err
+	}
+	if err := db.MemTable.Delete(key); err != nil {
+		return err
+	}
+	return nil
 }
