@@ -13,9 +13,9 @@ var (
 )
 
 type DatabaseEntry struct {
-	key     []byte
-	value   []byte
-	deleted bool
+	Key     []byte
+	Value   []byte
+	Deleted bool
 }
 
 type Database struct {
@@ -72,9 +72,9 @@ func (db *Database) Get(key []byte) (*DatabaseEntry, error) {
 	entry := db.MemTable.Get(key)
 	if entry != nil {
 		return &DatabaseEntry{
-			key:     key,
-			value:   entry.value,
-			deleted: entry.deleted,
+			Key:     key,
+			Value:   entry.value,
+			Deleted: entry.deleted,
 		}, nil
 	}
 

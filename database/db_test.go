@@ -27,11 +27,11 @@ func TestSetGet(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !bytes.Equal(gotEntry.key, key) {
-		t.Fatalf("got wrong key, want %s, got %s", key, gotEntry.key)
+	if !bytes.Equal(gotEntry.Key, key) {
+		t.Fatalf("got wrong key, want %s, got %s", key, gotEntry.Key)
 	}
-	if !bytes.Equal(gotEntry.value, value) {
-		t.Fatalf("got wrong value, want %s, got %s", value, gotEntry.value)
+	if !bytes.Equal(gotEntry.Value, value) {
+		t.Fatalf("got wrong value, want %s, got %s", value, gotEntry.Value)
 	}
 }
 
@@ -56,11 +56,11 @@ func TestDelete(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !bytes.Equal(gotEntry.key, key) {
-		t.Fatalf("got wrong key, want %s, got %s", key, gotEntry.key)
+	if !bytes.Equal(gotEntry.Key, key) {
+		t.Fatalf("got wrong key, want %s, got %s", key, gotEntry.Key)
 	}
-	if !bytes.Equal(gotEntry.value, value) {
-		t.Fatalf("got wrong value, want %s, got %s", value, gotEntry.value)
+	if !bytes.Equal(gotEntry.Value, value) {
+		t.Fatalf("got wrong value, want %s, got %s", value, gotEntry.Value)
 	}
 
 	err = db.Delete(key)
