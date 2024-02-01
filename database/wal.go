@@ -65,26 +65,19 @@ func (w *WalFile) ReadNextEntry() (*MemoryTableEntry, error) {
 		rw.read(&keyBuf)
 		rw.read(&valueBuf)
 
-		if rw.err != nil {
-			return nil, rw.err
-		}
-
 		return &MemoryTableEntry{
 			key:     keyBuf,
 			value:   valueBuf,
 			deleted: deletedBuf,
-		}, nil
+		}, rw.err
 	} else {
 		rw.read(&keyBuf)
-		if rw.err != nil {
-			return nil, rw.err
-		}
 
 		return &MemoryTableEntry{
 			key:     keyBuf,
 			value:   nil,
 			deleted: deletedBuf,
-		}, nil
+		}, rw.err
 	}
 
 }
