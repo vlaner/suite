@@ -39,7 +39,10 @@ func Open(dirPath string) (*Database, error) {
 		}
 		memTable.Set(entry.key, entry.value)
 		if entry.deleted {
-			memTable.Delete(entry.key)
+			err = memTable.Delete(entry.key)
+			if err != nil {
+				break
+			}
 		}
 	}
 
