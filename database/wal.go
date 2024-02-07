@@ -1,6 +1,7 @@
 package database
 
 import (
+	"bufio"
 	"encoding/binary"
 	"io"
 	"os"
@@ -27,6 +28,7 @@ func (wr *WalReadWriter) write(data any) {
 type WalFile struct {
 	path       string
 	fileHandle *os.File
+	bufRW      *bufio.ReadWriter
 }
 
 func NewWal(dirPath string) (*WalFile, error) {
@@ -42,14 +44,18 @@ func NewWal(dirPath string) (*WalFile, error) {
 		return nil, err
 	}
 
+	r := bufio.NewReader(handle)
+	w := bufio.NewWriter(handle)
+
 	return &WalFile{
 		path:       path,
 		fileHandle: handle,
+		bufRW:      bufio.NewReadWriter(r, w),
 	}, nil
 }
 
 func (w *WalFile) ReadNextEntry() (*MemoryTableEntry, error) {
-	rw := WalReadWriter{r: w.fileHandle, err: nil}
+	rw := WalReadWriter{r: w.bufRW, err: nil}
 	var keyLenBuf uint32
 	var deletedBuf bool
 
@@ -86,7 +92,7 @@ func (w *WalFile) Close() error {
 }
 
 func (w *WalFile) Set(key, value []byte) error {
-	rw := WalReadWriter{r: w.fileHandle, err: nil}
+	rw := WalReadWriter{r: w.bufRW, err: nil}
 
 	rw.write(int32(len(key)))
 	rw.write(false)
@@ -94,15 +100,23 @@ func (w *WalFile) Set(key, value []byte) error {
 	rw.write(key)
 	rw.write(value)
 
-	return rw.err
+	if rw.err != nil {
+		return rw.err
+	}
+
+	return w.bufRW.Flush()
 }
 
 func (w *WalFile) Delete(key []byte) error {
-	rw := WalReadWriter{r: w.fileHandle, err: nil}
+	rw := WalReadWriter{r: w.bufRW, err: nil}
 
 	rw.write(int32(len(key)))
 	rw.write(true)
 	rw.write(key)
 
-	return rw.err
+	if rw.err != nil {
+		return rw.err
+	}
+
+	return w.bufRW.Flush()
 }
