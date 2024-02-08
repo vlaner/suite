@@ -25,3 +25,17 @@ func TestSeveralMessages(t *testing.T) {
 		e.Publish(topic, Payload{[]byte("testdata")})
 	}
 }
+
+func TestExchangeWithProducer(t *testing.T) {
+	c := Consumer{}
+	topic := Topic("test")
+	e := NewExchange()
+	p := Producer{e: e}
+	e.ListenForMessages()
+
+	e.Subscribe(topic, &c)
+
+	for i := 0; i < 30; i++ {
+		p.Publish(topic, []byte("testdata"))
+	}
+}
