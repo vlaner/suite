@@ -3,7 +3,7 @@ package broker
 import "testing"
 
 func TestBasicConsume(t *testing.T) {
-	c := Consumer{}
+	c := PayloadConsumer{}
 	topic := Topic("test")
 	e := NewExchange()
 	e.ListenForMessages()
@@ -14,7 +14,7 @@ func TestBasicConsume(t *testing.T) {
 }
 
 func TestSeveralMessages(t *testing.T) {
-	c := Consumer{}
+	c := PayloadConsumer{}
 	topic := Topic("test")
 	e := NewExchange()
 	e.ListenForMessages()
@@ -27,7 +27,7 @@ func TestSeveralMessages(t *testing.T) {
 }
 
 func TestExchangeWithProducer(t *testing.T) {
-	c := Consumer{}
+	c := PayloadConsumer{}
 	topic := Topic("test")
 	e := NewExchange()
 	p := Producer{e: e}
@@ -41,7 +41,7 @@ func TestExchangeWithProducer(t *testing.T) {
 }
 
 func TestExchangeStopWorks(t *testing.T) {
-	c := Consumer{}
+	c := PayloadConsumer{}
 	topic := Topic("test")
 	e := NewExchange()
 	e.ListenForMessages()

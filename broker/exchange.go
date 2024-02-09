@@ -5,7 +5,7 @@ import "sync"
 type Topic string
 
 type Exchange struct {
-	consumers map[Topic]*Consumer
+	consumers map[Topic]Consumer
 	msgsCh    chan Message
 	wg        sync.WaitGroup
 	quit      chan struct{}
@@ -13,7 +13,7 @@ type Exchange struct {
 
 func NewExchange() *Exchange {
 	return &Exchange{
-		consumers: map[Topic]*Consumer{},
+		consumers: map[Topic]Consumer{},
 		msgsCh:    make(chan Message, 100),
 		wg:        sync.WaitGroup{},
 		quit:      make(chan struct{}),
@@ -26,7 +26,7 @@ func (e *Exchange) Stop() {
 	e.wg.Wait()
 }
 
-func (e *Exchange) Subscribe(topic Topic, c *Consumer) {
+func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 	_, exists := e.consumers[topic]
 	if !exists {
 		e.consumers[topic] = c

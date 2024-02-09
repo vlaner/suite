@@ -4,9 +4,12 @@ import (
 	"fmt"
 )
 
-type Consumer struct {
+type Consumer interface {
+	Consume(Payload)
 }
 
-func (c Consumer) Consume(payload Payload) {
+type PayloadConsumer struct{}
+
+func (c PayloadConsumer) Consume(payload Payload) {
 	fmt.Printf("consuming: %s\n", string(payload.data))
 }
