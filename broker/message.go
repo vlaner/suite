@@ -6,5 +6,5 @@ type Message struct {
 }
 
 type Payload struct {
-	data []byte
+	Data []byte
 }

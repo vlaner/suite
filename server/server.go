@@ -3,23 +3,30 @@ package server
 import (
 	"io"
 	"log"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/vlaner/suite/broker"
 )
 
 type TcpServer struct {
-	addr string
-	l    net.Listener
-	wg   sync.WaitGroup
-	quit chan interface{}
+	addr     string
+	l        net.Listener
+	wg       sync.WaitGroup
+	quit     chan interface{}
+	clients  map[net.Conn]*Client
+	exchange *broker.Exchange
 }
 
-func NewTcpServer(addr string) *TcpServer {
+func NewTcpServer(addr string, exchange *broker.Exchange) *TcpServer {
 	return &TcpServer{
-		addr: addr,
-		wg:   sync.WaitGroup{},
-		quit: make(chan interface{}),
+		addr:     addr,
+		wg:       sync.WaitGroup{},
+		quit:     make(chan interface{}),
+		clients:  make(map[net.Conn]*Client),
+		exchange: exchange,
 	}
 }
 
@@ -58,6 +65,9 @@ func (s *TcpServer) acceptLoop() {
 			continue
 		}
 
+		client := NewClient(rand.Intn(100), conn)
+		s.clients[conn] = client
+
 		s.wg.Add(1)
 		go func() {
 			s.handleConn(conn)
@@ -67,7 +77,10 @@ func (s *TcpServer) acceptLoop() {
 }
 
 func (s *TcpServer) handleConn(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		conn.Close()
+		delete(s.clients, conn)
+	}()
 
 	buf := make([]byte, 2048)
 ReadLoop:

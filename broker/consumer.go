@@ -11,5 +11,5 @@ type Consumer interface {
 type PayloadConsumer struct{}
 
 func (c PayloadConsumer) Consume(payload Payload) {
-	fmt.Printf("consuming: %s\n", string(payload.data))
+	fmt.Printf("consuming: %s\n", string(payload.Data))
 }
