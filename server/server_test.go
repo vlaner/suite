@@ -61,7 +61,6 @@ func TestServerHandlesMessage(t *testing.T) {
 }
 
 func TestServerMessageExchange(t *testing.T) {
-	var tcpConsumer *Client
 	msgsCount := 5
 	msgsProcessed := 0
 	e := broker.NewExchange()
@@ -76,15 +75,9 @@ func TestServerMessageExchange(t *testing.T) {
 		t.Errorf("error connecting to server: %s", err)
 	}
 	defer c.Stop()
-	found := false
-	for !found {
-		for _, tcpClients := range srv.clients {
-			tcpConsumer = tcpClients
-		}
-		if tcpConsumer != nil {
-			found = true
-		}
-	}
+
+	tcpConsumer := srv.getClientById(10)
+
 	reader := bufio.NewReader(c.conn)
 	sync := make(chan struct{})
 	go func() {

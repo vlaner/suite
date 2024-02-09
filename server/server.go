@@ -3,7 +3,6 @@ package server
 import (
 	"io"
 	"log"
-	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -65,7 +64,7 @@ func (s *TcpServer) acceptLoop() {
 			continue
 		}
 
-		client := NewClient(rand.Intn(100), conn)
+		client := NewClient(10, conn)
 		s.clients[conn] = client
 
 		s.wg.Add(1)
@@ -106,4 +105,13 @@ ReadLoop:
 			log.Printf("received from %v: %s", conn.RemoteAddr(), string(buf[:n]))
 		}
 	}
+}
+
+func (s *TcpServer) getClientById(id int) *Client {
+	for _, c := range s.clients {
+		if c.id == id {
+			return c
+		}
+	}
+	return nil
 }
