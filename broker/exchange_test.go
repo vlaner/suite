@@ -39,3 +39,16 @@ func TestExchangeWithProducer(t *testing.T) {
 		p.Publish(topic, []byte("testdata"))
 	}
 }
+
+func TestExchangeStopWorks(t *testing.T) {
+	c := Consumer{}
+	topic := Topic("test")
+	e := NewExchange()
+	e.ListenForMessages()
+
+	e.Subscribe(topic, &c)
+
+	e.Publish(topic, Payload{[]byte("testdata")})
+	e.Stop()
+	e.Publish(topic, Payload{[]byte("testdata")})
+}
