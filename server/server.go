@@ -11,21 +11,23 @@ import (
 )
 
 type TcpServer struct {
-	addr     string
-	l        net.Listener
-	wg       sync.WaitGroup
-	quit     chan interface{}
-	clients  map[net.Conn]*Client
-	exchange *broker.Exchange
+	addr      string
+	l         net.Listener
+	wg        sync.WaitGroup
+	quit      chan interface{}
+	clients   map[net.Conn]*Client
+	exchange  *broker.Exchange
+	clientIds int
 }
 
 func NewTcpServer(addr string, exchange *broker.Exchange) *TcpServer {
 	return &TcpServer{
-		addr:     addr,
-		wg:       sync.WaitGroup{},
-		quit:     make(chan interface{}),
-		clients:  make(map[net.Conn]*Client),
-		exchange: exchange,
+		addr:      addr,
+		wg:        sync.WaitGroup{},
+		quit:      make(chan interface{}),
+		clients:   make(map[net.Conn]*Client),
+		exchange:  exchange,
+		clientIds: 0,
 	}
 }
 
@@ -63,8 +65,8 @@ func (s *TcpServer) acceptLoop() {
 			}
 			continue
 		}
-
-		client := NewClient(10, conn)
+		s.clientIds++
+		client := NewClient(s.clientIds, conn, s.exchange)
 		s.clients[conn] = client
 
 		s.wg.Add(1)

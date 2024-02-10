@@ -30,7 +30,7 @@ func TestExchangeWithProducer(t *testing.T) {
 	c := PayloadConsumer{}
 	topic := Topic("test")
 	e := NewExchange()
-	p := Producer{e: e}
+	p := PayloadProducer{e: e}
 	e.ListenForMessages()
 
 	e.Subscribe(topic, &c)

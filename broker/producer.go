@@ -1,9 +1,13 @@
 package broker
 
-type Producer struct {
+type Producer interface {
+	Publish(topic Topic, data []byte)
+}
+
+type PayloadProducer struct {
 	e *Exchange
 }
 
-func (p *Producer) Publish(topic Topic, data []byte) {
+func (p *PayloadProducer) Publish(topic Topic, data []byte) {
 	p.e.Publish(topic, Payload{Data: data})
 }
