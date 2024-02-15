@@ -65,6 +65,8 @@ func TestServerMessageExchange(t *testing.T) {
 	msgsCount := 5
 	msgsProcessed := 0
 	e := broker.NewExchange()
+	e.ListenForMessages()
+
 	topic := broker.Topic("tcpserver")
 
 	srv := NewTcpServer(SERVER_ADDR, e)
@@ -78,6 +80,7 @@ func TestServerMessageExchange(t *testing.T) {
 	defer c.Stop()
 
 	tcpConsumer := srv.getClientById(1)
+	e.Subscribe(topic, tcpConsumer)
 
 	reader := bufio.NewReader(c.conn)
 	sync := make(chan struct{})
@@ -99,8 +102,6 @@ func TestServerMessageExchange(t *testing.T) {
 		}
 	}()
 
-	e.ListenForMessages()
-	e.Subscribe(topic, tcpConsumer)
 	for i := 0; i < msgsCount; i++ {
 		e.Publish(topic, broker.Payload{Data: []byte("testing tcp send")})
 	}
@@ -112,10 +113,12 @@ func TestServerConsumerAndProducer(t *testing.T) {
 	msgsCount := 5
 	e := broker.NewExchange()
 	topic := broker.Topic("tcpserver")
+	e.ListenForMessages()
 
 	srv := NewTcpServer(SERVER_ADDR, e)
 	srv.Start()
 	defer srv.Stop()
+
 	consumer, err := newTestClient(SERVER_ADDR)
 	if err != nil {
 		t.Errorf("error connecting to server: %s", err)
@@ -129,6 +132,8 @@ func TestServerConsumerAndProducer(t *testing.T) {
 	defer producer.Stop()
 
 	tcpConsumer := srv.getClientById(1)
+	e.Subscribe(topic, tcpConsumer)
+
 	tcpProducer := srv.getClientById(2)
 
 	reader := bufio.NewReader(consumer.conn)
@@ -176,8 +181,6 @@ func TestServerConsumerAndProducer(t *testing.T) {
 	for i := 0; i < msgsCount; i++ {
 		tcpProducer.conn.Write([]byte("data from producer over tcp\n"))
 	}
-	e.ListenForMessages()
-	e.Subscribe(topic, tcpConsumer)
 
 	<-syncConsumer
 	<-syncProducer
