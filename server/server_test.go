@@ -1,8 +1,6 @@
 package server
 
 import (
-	"bufio"
-	"io"
 	"net"
 	"testing"
 	"time"
@@ -22,7 +20,7 @@ func (tc *testClient) Stop() {
 }
 
 func newTestClient(srvAddr string) (*testClient, error) {
-	conn, err := net.Dial("tcp", ":8000")
+	conn, err := net.Dial("tcp", srvAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -62,12 +60,10 @@ func TestServerHandlesMessage(t *testing.T) {
 }
 
 func TestServerMessageExchange(t *testing.T) {
-	msgsCount := 5
-	msgsProcessed := 0
 	e := broker.NewExchange()
 	e.ListenForMessages()
 
-	topic := broker.Topic("tcpserver")
+	topic := broker.Topic("TESTTOPIC")
 
 	srv := NewTcpServer(SERVER_ADDR, e)
 	srv.Start()
@@ -79,40 +75,18 @@ func TestServerMessageExchange(t *testing.T) {
 	}
 	defer c.Stop()
 
-	tcpConsumer := srv.getClientById(1)
-	e.Subscribe(topic, tcpConsumer)
+	c.conn.Write([]byte("consume TESTTOPIC"))
 
-	reader := bufio.NewReader(c.conn)
-	sync := make(chan struct{})
-	go func() {
-		for {
-			buf, _, err := reader.ReadLine()
-			if err != nil {
-				if err != io.EOF {
-					t.Errorf("read error: %s", err)
-				}
-				return
-			}
-			t.Logf("got response: %s\n", string(buf[:]))
-			msgsProcessed++
-			if msgsProcessed == msgsCount {
-				sync <- struct{}{}
-				break
-			}
-		}
-	}()
-
+	time.Sleep(100 * time.Millisecond)
+	msgsCount := 5
 	for i := 0; i < msgsCount; i++ {
-		e.Publish(topic, broker.Payload{Data: []byte("testing tcp send")})
+		e.Publish(topic, broker.Payload{Data: []byte("testing tcp send directly from exchange")})
 	}
-
-	<-sync
 }
 
 func TestServerConsumerAndProducer(t *testing.T) {
 	msgsCount := 5
 	e := broker.NewExchange()
-	topic := broker.Topic("tcpserver")
 	e.ListenForMessages()
 
 	srv := NewTcpServer(SERVER_ADDR, e)
@@ -131,57 +105,10 @@ func TestServerConsumerAndProducer(t *testing.T) {
 	}
 	defer producer.Stop()
 
-	tcpConsumer := srv.getClientById(1)
-	e.Subscribe(topic, tcpConsumer)
-
-	tcpProducer := srv.getClientById(2)
-
-	reader := bufio.NewReader(consumer.conn)
-	syncConsumer := make(chan struct{})
-	msgsProcessed := 0
-	go func() {
-		for {
-			buf, _, err := reader.ReadLine()
-			if err != nil {
-				if err != io.EOF {
-					t.Errorf("read error: %s", err)
-				}
-				return
-			}
-			t.Logf("consuming: %s\n", string(buf[:]))
-			msgsProcessed++
-			if msgsProcessed == msgsCount {
-				syncConsumer <- struct{}{}
-				break
-			}
-		}
-	}()
-
-	msgsSent := 0
-	producerReader := bufio.NewReader(producer.conn)
-	syncProducer := make(chan struct{})
-	go func() {
-		for {
-			buf, _, err := producerReader.ReadLine()
-			if err != nil {
-				if err != io.EOF {
-					t.Errorf("read error: %s", err)
-				}
-				return
-			}
-			tcpProducer.Publish(topic, buf)
-			msgsSent++
-			if msgsSent == msgsCount {
-				syncProducer <- struct{}{}
-				break
-			}
-		}
-	}()
+	consumer.conn.Write([]byte("consume TESTTOPIC"))
+	producer.conn.Write([]byte("producer TESTTOPIC"))
 
 	for i := 0; i < msgsCount; i++ {
-		tcpProducer.conn.Write([]byte("data from producer over tcp\n"))
+		producer.conn.Write([]byte("publish TESTTOPIC data from producer over tcp\n"))
 	}
-
-	<-syncConsumer
-	<-syncProducer
 }

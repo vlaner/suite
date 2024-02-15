@@ -4,6 +4,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,18 +67,18 @@ func (s *TcpServer) acceptLoop() {
 			continue
 		}
 		s.clientIds++
-		client := NewClient(s.clientIds, conn, s.exchange)
+		client := NewClient(s.clientIds, conn, -1, s.exchange)
 		s.clients[conn] = client
 
 		s.wg.Add(1)
 		go func() {
-			s.handleConn(conn)
+			s.handleConn(conn, s.clientIds)
 			defer s.wg.Done()
 		}()
 	}
 }
 
-func (s *TcpServer) handleConn(conn net.Conn) {
+func (s *TcpServer) handleConn(conn net.Conn, id int) {
 	defer func() {
 		conn.Close()
 		delete(s.clients, conn)
@@ -104,7 +105,35 @@ ReadLoop:
 				return
 			}
 
-			log.Printf("received from %v: %s", conn.RemoteAddr(), string(buf[:n]))
+			log.Printf("received from %v: %s, ID: %d", conn.RemoteAddr(), string(buf[:n]), id)
+
+			command := string(buf[:n])
+			if strings.HasPrefix(command, "consume ") {
+				c := s.getClientById(id)
+				c.makeConsumer()
+				topic := strings.Split(command, " ")[1]
+				s.exchange.Subscribe(broker.Topic(topic), c)
+			}
+
+			if strings.HasPrefix(command, "producer ") {
+				c := s.getClientById(id)
+				c.makeProducer()
+				topic := strings.Split(command, " ")[1]
+				s.exchange.Subscribe(broker.Topic(topic), c)
+			}
+
+			if strings.HasPrefix(command, "publish ") {
+				c := s.getClientById(id)
+				topic := strings.Split(command, " ")[1]
+				data := strings.Split(command, " ")[2:]
+
+				var payload []byte
+				for _, d := range data {
+					payload = append(payload[:], []byte(d)...)
+				}
+
+				c.Publish(broker.Topic(topic), payload)
+			}
 		}
 	}
 }
