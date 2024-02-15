@@ -126,14 +126,7 @@ ReadLoop:
 			if strings.HasPrefix(command, "publish ") {
 				c := s.getClientById(id)
 				topic := strings.Split(command, " ")[1]
-				data := strings.Split(command, " ")[2:]
-				var payload []byte
-				for _, d := range data {
-					payload = append(payload[:], []byte(d)...)
-					payload = append(payload[:], []byte(" ")...)
-				}
-
-				c.Publish(broker.Topic(topic), payload)
+				c.Publish(broker.Topic(topic), []byte(b[len("publish ")+len(topic)+1:]))
 			}
 		}
 	}
