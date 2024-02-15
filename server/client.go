@@ -41,7 +41,7 @@ func (c *Client) makeConsumer() {
 
 func (c Client) Consume(payload broker.Payload) {
 	if c.kind == CONSUMER {
-		fmt.Println("DATA FROM TCP CONSUMER: ", string(payload.Data))
+		fmt.Println("DATA FROM TCP CONSUMER:", string(payload.Data))
 	}
 }
 

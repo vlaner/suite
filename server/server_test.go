@@ -75,7 +75,7 @@ func TestServerMessageExchange(t *testing.T) {
 	}
 	defer c.Stop()
 
-	c.conn.Write([]byte("consume TESTTOPIC"))
+	c.conn.Write([]byte("consume TESTTOPIC\n"))
 
 	time.Sleep(100 * time.Millisecond)
 	msgsCount := 5
@@ -105,8 +105,9 @@ func TestServerConsumerAndProducer(t *testing.T) {
 	}
 	defer producer.Stop()
 
-	consumer.conn.Write([]byte("consume TESTTOPIC"))
-	producer.conn.Write([]byte("producer TESTTOPIC"))
+	consumer.conn.Write([]byte("consume TESTTOPIC\n"))
+	producer.conn.Write([]byte("producer TESTTOPIC\n"))
+	time.Sleep(100 * time.Millisecond)
 
 	for i := 0; i < msgsCount; i++ {
 		producer.conn.Write([]byte("publish TESTTOPIC data from producer over tcp\n"))

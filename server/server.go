@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"io"
 	"log"
 	"net"
@@ -84,7 +85,7 @@ func (s *TcpServer) handleConn(conn net.Conn, id int) {
 		delete(s.clients, conn)
 	}()
 
-	buf := make([]byte, 2048)
+	r := bufio.NewReader(conn)
 ReadLoop:
 	for {
 		select {
@@ -92,7 +93,7 @@ ReadLoop:
 			return
 		default:
 			conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
-			n, err := conn.Read(buf)
+			b, _, err := r.ReadLine()
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					continue ReadLoop
@@ -101,13 +102,13 @@ ReadLoop:
 					return
 				}
 			}
-			if n == 0 {
+			if len(b) == 0 {
 				return
 			}
 
-			log.Printf("received from %v: %s, ID: %d", conn.RemoteAddr(), string(buf[:n]), id)
+			log.Printf("received from %v: %s, ID: %d", conn.RemoteAddr(), string(b), id)
 
-			command := string(buf[:n])
+			command := string(b)
 			if strings.HasPrefix(command, "consume ") {
 				c := s.getClientById(id)
 				c.makeConsumer()
@@ -126,10 +127,10 @@ ReadLoop:
 				c := s.getClientById(id)
 				topic := strings.Split(command, " ")[1]
 				data := strings.Split(command, " ")[2:]
-
 				var payload []byte
 				for _, d := range data {
 					payload = append(payload[:], []byte(d)...)
+					payload = append(payload[:], []byte(" ")...)
 				}
 
 				c.Publish(broker.Topic(topic), payload)
