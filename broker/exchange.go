@@ -1,6 +1,8 @@
 package broker
 
-import "sync"
+import (
+	"sync"
+)
 
 type Topic string
 
@@ -8,6 +10,7 @@ type Exchange struct {
 	consumers map[Topic]Consumer
 	msgsCh    chan Message
 	wg        sync.WaitGroup
+	sync      sync.RWMutex
 	quit      chan struct{}
 }
 
@@ -27,6 +30,9 @@ func (e *Exchange) Stop() {
 }
 
 func (e *Exchange) Subscribe(topic Topic, c Consumer) {
+	e.sync.Lock()
+	defer e.sync.Unlock()
+
 	_, exists := e.consumers[topic]
 	if !exists {
 		e.consumers[topic] = c
@@ -43,6 +49,9 @@ func (e *Exchange) Publish(topic Topic, payload Payload) {
 }
 
 func (e *Exchange) ProcessMessage(msg Message) {
+	e.sync.RLock()
+	defer e.sync.RUnlock()
+
 	consumer, exists := e.consumers[msg.topic]
 	if exists {
 		consumer.Consume(msg.payload)
