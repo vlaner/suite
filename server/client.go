@@ -1,7 +1,7 @@
 package server
 
 import (
-	"fmt"
+	"log"
 	"net"
 
 	"github.com/vlaner/suite/broker"
@@ -41,7 +41,11 @@ func (c *Client) makeConsumer() {
 
 func (c Client) Consume(payload broker.Payload) {
 	if c.kind == CONSUMER {
-		fmt.Println("DATA FROM TCP CONSUMER:", string(payload.Data))
+		_, err := c.conn.Write(append(payload.Data, []byte("\n")...))
+
+		if err != nil {
+			log.Printf("error writing payload bytes to %d: %s\n", c.id, err)
+		}
 	}
 }
 
