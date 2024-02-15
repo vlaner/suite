@@ -26,7 +26,7 @@ func newTestClient(srvAddr string) (*testClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	return &testClient{
 		conn: conn,
 	}, nil
