@@ -9,7 +9,7 @@ type Topic string
 
 type Exchange struct {
 	consumers map[Topic]Consumer
-	deadMsgs  []Message
+	deadMsgs  chan Message
 	msgsCh    chan Message
 	wg        sync.WaitGroup
 	sync      sync.Mutex
@@ -19,7 +19,7 @@ type Exchange struct {
 func NewExchange() *Exchange {
 	return &Exchange{
 		consumers: map[Topic]Consumer{},
-		deadMsgs:  []Message{},
+		deadMsgs:  make(chan Message, 100),
 		msgsCh:    make(chan Message, 100),
 		wg:        sync.WaitGroup{},
 		quit:      make(chan struct{}),
@@ -29,6 +29,7 @@ func NewExchange() *Exchange {
 func (e *Exchange) Stop() {
 	close(e.quit)
 	close(e.msgsCh)
+	close(e.deadMsgs)
 	e.wg.Wait()
 }
 
@@ -57,7 +58,7 @@ func (e *Exchange) ProcessMessage(msg Message) {
 
 	consumer, exists := e.consumers[msg.topic]
 	if !exists {
-		e.deadMsgs = append(e.deadMsgs, msg)
+		e.deadMsgs <- msg
 		return
 	}
 
@@ -74,14 +75,13 @@ func (e *Exchange) ListenForMessages() {
 			case <-e.quit:
 				return
 			case <-ticker.C:
-				for _, msg := range e.deadMsgs {
+				for msg := range e.deadMsgs {
 					e.wg.Add(1)
 					go func(msg Message) {
 						defer e.wg.Done()
 						e.ProcessMessage(msg)
 					}(msg)
 				}
-				e.deadMsgs = []Message{}
 			}
 		}
 	}()
