@@ -72,10 +72,9 @@ func (e *Exchange) ListenForMessages() {
 				return
 			case msg := <-e.deadMsgs:
 				e.wg.Add(1)
-				go func(msg Message) {
-					defer e.wg.Done()
-					e.ProcessMessage(msg)
-				}(msg)
+				e.ProcessMessage(msg)
+				e.wg.Done()
+
 			}
 		}
 	}()
@@ -87,10 +86,8 @@ func (e *Exchange) ListenForMessages() {
 				return
 			case message := <-e.msgsCh:
 				e.wg.Add(1)
-				go func(msg Message) {
-					defer e.wg.Done()
-					e.ProcessMessage(msg)
-				}(message)
+				e.ProcessMessage(message)
+				e.wg.Done()
 			}
 		}
 	}()
