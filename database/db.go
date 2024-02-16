@@ -70,15 +70,19 @@ func (db *Database) Set(key []byte, value []byte) error {
 
 func (db *Database) Get(key []byte) (*DatabaseEntry, error) {
 	entry := db.MemTable.Get(key)
-	if entry != nil {
-		return &DatabaseEntry{
-			Key:     key,
-			Value:   entry.value,
-			Deleted: entry.deleted,
-		}, nil
+	if entry == nil {
+		return nil, ErrKeyNotFound
+	}
+	if entry.deleted {
+		return nil, ErrKeyNotFound
 	}
 
-	return nil, ErrKeyNotFound
+	return &DatabaseEntry{
+		Key:     key,
+		Value:   entry.value,
+		Deleted: entry.deleted,
+	}, nil
+
 }
 
 func (db *Database) Delete(key []byte) error {
