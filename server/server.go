@@ -72,7 +72,7 @@ func (s *TcpServer) acceptLoop() {
 			continue
 		}
 		s.clientIds++
-		client := NewClient(s.clientIds, conn, -1, s.exchange)
+		client := NewClient(s.clientIds, conn, s.exchange)
 		s.clients[conn] = client
 
 		s.wg.Add(1)

@@ -7,24 +7,25 @@ import (
 	"github.com/vlaner/suite/broker"
 )
 
+// client kind
 const (
-	PRODUCER = 0
-	CONSUMER = 1
+	UNASSIGNED = -1
+	PRODUCER   = 0
+	CONSUMER   = 1
 )
 
 type Client struct {
 	id   int
 	conn net.Conn
-	// 0 - producer, 1 - consumer
 	kind int
 	e    *broker.Exchange
 }
 
-func NewClient(id int, conn net.Conn, kind int, e *broker.Exchange) *Client {
+func NewClient(id int, conn net.Conn, e *broker.Exchange) *Client {
 	client := Client{
 		id:   id,
 		conn: conn,
-		kind: kind,
+		kind: UNASSIGNED,
 		e:    e,
 	}
 
@@ -32,11 +33,15 @@ func NewClient(id int, conn net.Conn, kind int, e *broker.Exchange) *Client {
 }
 
 func (c *Client) makeProducer() {
-	c.kind = PRODUCER
+	if c.kind == UNASSIGNED {
+		c.kind = PRODUCER
+	}
 }
 
 func (c *Client) makeConsumer() {
-	c.kind = CONSUMER
+	if c.kind == UNASSIGNED {
+		c.kind = CONSUMER
+	}
 }
 
 func (c Client) Consume(payload broker.Payload) {
