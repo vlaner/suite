@@ -159,3 +159,59 @@ func TestServerWithDatabaseGetSet(t *testing.T) {
 		t.Errorf("unexpected 'get' result from server, wanted 'key: testkey; value: testval' but got %s", getResult)
 	}
 }
+
+func TestServerWithDatabaseGetError(t *testing.T) {
+	dirPath := "testdb"
+	defer os.RemoveAll(dirPath)
+
+	db, err := database.Open(dirPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	srv := NewTcpServer(SERVER_ADDR, nil, db)
+	srv.Start()
+	defer srv.Stop()
+
+	c, err := newTestClient(SERVER_ADDR)
+	if err != nil {
+		t.Errorf("error connecting to server: %s", err)
+	}
+	defer c.Stop()
+
+	c.conn.Write([]byte("get testkey\n"))
+	go c.waitForMessages(t, 1)
+	getResult := <-c.msgCh
+	if getResult != "key not found" {
+		t.Errorf("unexpected 'get' result from server, wanted 'key not found' but got %s", getResult)
+	}
+}
+
+func TestServerWithDatabaseDelError(t *testing.T) {
+	dirPath := "testdb"
+	defer os.RemoveAll(dirPath)
+
+	db, err := database.Open(dirPath)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer db.Close()
+
+	srv := NewTcpServer(SERVER_ADDR, nil, db)
+	srv.Start()
+	defer srv.Stop()
+
+	c, err := newTestClient(SERVER_ADDR)
+	if err != nil {
+		t.Errorf("error connecting to server: %s", err)
+	}
+	defer c.Stop()
+
+	c.conn.Write([]byte("del testkey\n"))
+	go c.waitForMessages(t, 1)
+	getResult := <-c.msgCh
+	if getResult != "cannot delete key" {
+		t.Errorf("unexpected 'get' result from server, wanted 'cannot delete key' but got %s", getResult)
+	}
+}
