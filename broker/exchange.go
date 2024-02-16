@@ -2,7 +2,6 @@ package broker
 
 import (
 	"sync"
-	"time"
 )
 
 type Topic string
@@ -67,32 +66,32 @@ func (e *Exchange) ProcessMessage(msg Message) {
 
 func (e *Exchange) ListenForMessages() {
 	go func() {
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
-
 		for {
 			select {
 			case <-e.quit:
 				return
-			case <-ticker.C:
-				for msg := range e.deadMsgs {
-					e.wg.Add(1)
-					go func(msg Message) {
-						defer e.wg.Done()
-						e.ProcessMessage(msg)
-					}(msg)
-				}
+			case msg := <-e.deadMsgs:
+				e.wg.Add(1)
+				go func(msg Message) {
+					defer e.wg.Done()
+					e.ProcessMessage(msg)
+				}(msg)
 			}
 		}
 	}()
 
 	go func() {
-		for message := range e.msgsCh {
-			e.wg.Add(1)
-			go func(msg Message) {
-				defer e.wg.Done()
-				e.ProcessMessage(msg)
-			}(message)
+		for {
+			select {
+			case <-e.quit:
+				return
+			case message := <-e.msgsCh:
+				e.wg.Add(1)
+				go func(msg Message) {
+					defer e.wg.Done()
+					e.ProcessMessage(msg)
+				}(message)
+			}
 		}
 	}()
 }
