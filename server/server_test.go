@@ -155,7 +155,7 @@ func TestServerWithDatabaseGetSet(t *testing.T) {
 	c.conn.Write([]byte("get testkey\n"))
 	go c.waitForMessages(t, 1)
 	getResult := <-c.msgCh
-	if getResult != "key: testkey; value: testval" {
+	if getResult != "key: testkey; value: testval test 2" {
 		t.Errorf("unexpected 'get' result from server, wanted 'key: testkey; value: testval' but got %s", getResult)
 	}
 }
