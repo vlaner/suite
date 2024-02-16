@@ -12,8 +12,9 @@ import (
 const SERVER_ADDR = ":8000"
 
 type testClient struct {
-	id   int
-	conn net.Conn
+	id    int
+	conn  net.Conn
+	msgCh chan string
 }
 
 func (tc *testClient) Stop() {
@@ -28,8 +29,10 @@ func (tc *testClient) waitForMessages(t *testing.T, amount int) {
 			t.Errorf("error reading from server: %s", err)
 		}
 
-		t.Logf("got message from server: %s", string(b))
+		tc.msgCh <- string(b)
 	}
+
+	close(tc.msgCh)
 }
 
 func newTestClient(srvAddr string) (*testClient, error) {
@@ -41,7 +44,8 @@ func newTestClient(srvAddr string) (*testClient, error) {
 	time.Sleep(10 * time.Millisecond)
 
 	return &testClient{
-		conn: conn,
+		conn:  conn,
+		msgCh: make(chan string),
 	}, nil
 }
 
@@ -83,7 +87,10 @@ func TestServerMessageExchange(t *testing.T) {
 		e.Publish(topic, broker.Payload{Data: []byte("testing tcp send directly from exchange")})
 	}
 
-	c.waitForMessages(t, msgsCount)
+	go c.waitForMessages(t, msgsCount)
+	for msg := range c.msgCh {
+		t.Logf("got message from server: %s", msg)
+	}
 }
 
 func TestServerConsumerAndProducer(t *testing.T) {
@@ -116,5 +123,8 @@ func TestServerConsumerAndProducer(t *testing.T) {
 		producer.conn.Write([]byte("publish TESTTOPIC data from producer over tcp\n"))
 	}
 
-	consumer.waitForMessages(t, msgsCount)
+	go consumer.waitForMessages(t, msgsCount)
+	for msg := range consumer.msgCh {
+		t.Logf("got message from server: %s", msg)
+	}
 }
