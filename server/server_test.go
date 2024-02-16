@@ -151,7 +151,7 @@ func TestServerWithDatabaseGetSet(t *testing.T) {
 	}
 	defer c.Stop()
 
-	c.conn.Write([]byte("set testkey testval\n"))
+	c.conn.Write([]byte("set testkey testval test 2\n"))
 	c.conn.Write([]byte("get testkey\n"))
 	go c.waitForMessages(t, 1)
 	getResult := <-c.msgCh

@@ -144,7 +144,7 @@ ReadLoop:
 
 			if strings.HasPrefix(command, "set ") {
 				key := strings.Split(command, " ")[1]
-				value := strings.Split(command, " ")[2]
+				value := []byte(b[len("set ")+len(key)+1:])
 
 				err := s.database.Set([]byte(key), []byte(value))
 				if err != nil {
