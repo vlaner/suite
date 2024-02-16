@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/vlaner/suite/broker"
 	"github.com/vlaner/suite/database"
@@ -42,8 +41,6 @@ func newTestClient(srvAddr string) (*testClient, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	time.Sleep(10 * time.Millisecond)
 
 	return &testClient{
 		conn:  conn,
@@ -82,8 +79,6 @@ func TestServerMessageExchange(t *testing.T) {
 
 	c.conn.Write([]byte("consume TESTTOPIC\n"))
 
-	time.Sleep(100 * time.Millisecond)
-
 	msgsCount := 5
 	for i := 0; i < msgsCount; i++ {
 		e.Publish(topic, broker.Payload{Data: []byte("testing tcp send directly from exchange")})
@@ -117,8 +112,6 @@ func TestServerConsumerAndProducer(t *testing.T) {
 
 	consumer.conn.Write([]byte("consume TESTTOPIC\n"))
 	producer.conn.Write([]byte("producer TESTTOPIC\n"))
-
-	time.Sleep(100 * time.Millisecond)
 
 	msgsCount := 5
 	for i := 0; i < msgsCount; i++ {
