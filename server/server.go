@@ -2,6 +2,7 @@ package server
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vlaner/suite/broker"
+	"github.com/vlaner/suite/database"
 )
 
 type TcpServer struct {
@@ -19,16 +21,18 @@ type TcpServer struct {
 	quit      chan interface{}
 	clients   map[net.Conn]*Client
 	exchange  *broker.Exchange
+	database  *database.Database
 	clientIds int
 }
 
-func NewTcpServer(addr string, exchange *broker.Exchange) *TcpServer {
+func NewTcpServer(addr string, exchange *broker.Exchange, db *database.Database) *TcpServer {
 	return &TcpServer{
 		addr:      addr,
 		wg:        sync.WaitGroup{},
 		quit:      make(chan interface{}),
 		clients:   make(map[net.Conn]*Client),
 		exchange:  exchange,
+		database:  db,
 		clientIds: 0,
 	}
 }
@@ -127,6 +131,35 @@ ReadLoop:
 				c := s.getClientById(id)
 				topic := strings.Split(command, " ")[1]
 				c.Publish(broker.Topic(topic), []byte(b[len("publish ")+len(topic)+1:]))
+			}
+
+			if strings.HasPrefix(command, "get ") {
+				entry, err := s.database.Get(b[len("gen "):])
+				if err != nil {
+					conn.Write([]byte("key not found\n"))
+					continue ReadLoop
+				}
+				conn.Write([]byte(fmt.Sprintf("key: %s; value: %s\n", entry.Key, entry.Value)))
+			}
+
+			if strings.HasPrefix(command, "set ") {
+				key := strings.Split(command, " ")[1]
+				value := strings.Split(command, " ")[2]
+
+				err := s.database.Set([]byte(key), []byte(value))
+				if err != nil {
+					conn.Write([]byte("cannot set key\n"))
+					continue ReadLoop
+				}
+			}
+
+			if strings.HasPrefix(command, "del ") {
+				key := strings.Split(command, " ")[1]
+				err := s.database.Delete([]byte(key))
+				if err != nil {
+					conn.Write([]byte("cannot delete key\n"))
+					continue ReadLoop
+				}
 			}
 		}
 	}
