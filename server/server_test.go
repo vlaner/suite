@@ -2,15 +2,22 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"net"
 	"os"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/vlaner/suite/broker"
 	"github.com/vlaner/suite/database"
 )
 
 const SERVER_ADDR = ":8000"
+
+func intToBytes(i int) []byte {
+	return []byte(strconv.Itoa(i))
+}
 
 type testClient struct {
 	id    int
@@ -121,6 +128,40 @@ func TestServerConsumerAndProducer(t *testing.T) {
 	go consumer.waitForMessages(t, msgsCount)
 	for msg := range consumer.msgCh {
 		t.Logf("got message from server: %s", msg)
+	}
+}
+
+func TestServerClientReceivesPayloadInOrder(t *testing.T) {
+	e := broker.NewExchange()
+	e.ListenForMessages()
+	topic := broker.Topic("TESTTOPIC")
+
+	srv := NewTcpServer(SERVER_ADDR, e, nil)
+
+	srv.Start()
+	defer srv.Stop()
+
+	c, err := newTestClient(SERVER_ADDR)
+	if err != nil {
+		t.Errorf("error connecting to server: %s", err)
+	}
+	defer c.Stop()
+	c.conn.Write([]byte("consume TESTTOPIC\n"))
+
+	time.Sleep(10 * time.Millisecond)
+
+	msgsCount := 50
+	for i := 0; i < msgsCount; i++ {
+		e.Publish(topic, broker.Payload{Data: append([]byte("message #"), intToBytes(i)...)})
+	}
+
+	go c.waitForMessages(t, msgsCount)
+	for i := 0; i < msgsCount; i++ {
+		gotData := <-c.msgCh
+		want := append([]byte("message #"), intToBytes(i)...)
+		if !bytes.Equal([]byte(gotData), want) {
+			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), string(gotData))
+		}
 	}
 }
 
