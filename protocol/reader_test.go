@@ -7,9 +7,9 @@ import (
 
 func TestParseBinaryString(t *testing.T) {
 	input := Value{
-		valType: 1,
-		str:     "test",
-		array:   nil,
+		ValType: 1,
+		Str:     "test",
+		Array:   nil,
 	}
 
 	inputBytes, err := input.Marshal()
@@ -26,23 +26,23 @@ func TestParseBinaryString(t *testing.T) {
 		t.Fatalf("unexpected error parsing binary string: %s\n", err)
 	}
 
-	if val.valType != BINARY_STRING {
-		t.Errorf("unexpected parse type value: want %d got %d\n", BINARY_STRING, val.valType)
+	if val.ValType != BINARY_STRING {
+		t.Errorf("unexpected parse type value: want %d got %d\n", BINARY_STRING, val.ValType)
 	}
 
-	if val.str != "test" {
-		t.Errorf("unexpected parse output: want %s got %s\n", input.str, val.str)
+	if val.Str != "test" {
+		t.Errorf("unexpected parse output: want %s got %s\n", input.Str, val.Str)
 	}
 }
 
 func TestParseArrayOfBinaryString(t *testing.T) {
 	input := Value{
-		valType: ARRAY,
-		str:     "",
-		array: []*Value{
-			{valType: BINARY_STRING, str: "test1"},
-			{valType: BINARY_STRING, str: "test2"},
-			{valType: BINARY_STRING, str: "test3"},
+		ValType: ARRAY,
+		Str:     "",
+		Array: []*Value{
+			{ValType: BINARY_STRING, Str: "test1"},
+			{ValType: BINARY_STRING, Str: "test2"},
+			{ValType: BINARY_STRING, Str: "test3"},
 		},
 	}
 
@@ -59,31 +59,31 @@ func TestParseArrayOfBinaryString(t *testing.T) {
 		t.Fatalf("unexpected error while parsing array: %s\n", err)
 	}
 
-	if val.array[0].str != input.array[0].str {
-		t.Errorf("unexpected parse output: want %s got %s", input.array[0].str, val.array[0].str)
+	if val.Array[0].Str != input.Array[0].Str {
+		t.Errorf("unexpected parse output: want %s got %s", input.Array[0].Str, val.Array[0].Str)
 	}
-	if val.array[0].valType != BINARY_STRING {
-		t.Errorf("unexpected parse type value: want %d got %d\n", BINARY_STRING, val.array[0].valType)
-	}
-
-	if val.array[1].str != input.array[1].str {
-		t.Errorf("unexpected parse output: want %s got %s", input.array[1].str, val.array[1].str)
-	}
-	if val.array[1].valType != BINARY_STRING {
-		t.Errorf("unexpected parse type value: want %d got %d\n", BINARY_STRING, val.array[1].valType)
+	if val.Array[0].ValType != BINARY_STRING {
+		t.Errorf("unexpected parse type value: want %d got %d\n", BINARY_STRING, val.Array[0].ValType)
 	}
 
-	if val.array[2].str != input.array[2].str {
-		t.Errorf("unexpected parse output: want %s got %s", input.array[2].str, val.array[2].str)
+	if val.Array[1].Str != input.Array[1].Str {
+		t.Errorf("unexpected parse output: want %s got %s", input.Array[1].Str, val.Array[1].Str)
 	}
-	if val.array[2].valType != BINARY_STRING {
-		t.Errorf("unexpected parse type value: want %d got %d\n", BINARY_STRING, val.array[2].valType)
+	if val.Array[1].ValType != BINARY_STRING {
+		t.Errorf("unexpected parse type value: want %d got %d\n", BINARY_STRING, val.Array[1].ValType)
+	}
+
+	if val.Array[2].Str != input.Array[2].Str {
+		t.Errorf("unexpected parse output: want %s got %s", input.Array[2].Str, val.Array[2].Str)
+	}
+	if val.Array[2].ValType != BINARY_STRING {
+		t.Errorf("unexpected parse type value: want %d got %d\n", BINARY_STRING, val.Array[2].ValType)
 	}
 }
 func TestParseError(t *testing.T) {
 	input := Value{
-		valType: ERROR,
-		str:     "test",
+		ValType: ERROR,
+		Str:     "test",
 	}
 
 	inputBytes, err := input.Marshal()
@@ -99,10 +99,10 @@ func TestParseError(t *testing.T) {
 		t.Fatalf("unexpected error while parsing array: %s\n", err)
 	}
 
-	if val.str != input.str {
-		t.Errorf("unexpected parse output: want %s got %s", input.str, val.str)
+	if val.Str != input.Str {
+		t.Errorf("unexpected parse output: want %s got %s", input.Str, val.Str)
 	}
-	if val.valType != ERROR {
-		t.Errorf("unexpected parse type value: want %d got %d\n", ERROR, val.valType)
+	if val.ValType != ERROR {
+		t.Errorf("unexpected parse type value: want %d got %d\n", ERROR, val.ValType)
 	}
 }

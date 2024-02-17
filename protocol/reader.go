@@ -36,7 +36,7 @@ func (r *ProtoReader) ParseInput() (*Value, error) {
 
 func (r *ProtoReader) parseBinaryString() (*Value, error) {
 	var v Value
-	v.valType = BINARY_STRING
+	v.ValType = BINARY_STRING
 
 	var length uint32
 	if err := binary.Read(r.reader, binary.LittleEndian, &length); err != nil {
@@ -48,26 +48,26 @@ func (r *ProtoReader) parseBinaryString() (*Value, error) {
 		return nil, err
 	}
 
-	v.str = string(strBuf)
+	v.Str = string(strBuf)
 
 	return &v, nil
 }
 
 func (r *ProtoReader) parseArray() (*Value, error) {
 	var v Value
-	v.valType = ARRAY
+	v.ValType = ARRAY
 	var length uint32
 	if err := binary.Read(r.reader, binary.LittleEndian, &length); err != nil {
 		return nil, err
 	}
 
-	v.array = make([]*Value, length)
+	v.Array = make([]*Value, length)
 	for i := 0; i < int(length); i++ {
 		val, err := r.ParseInput()
 		if err != nil {
 			return nil, err
 		}
-		v.array[i] = val
+		v.Array[i] = val
 	}
 
 	return &v, nil
@@ -75,7 +75,7 @@ func (r *ProtoReader) parseArray() (*Value, error) {
 
 func (r *ProtoReader) parseError() (*Value, error) {
 	var v Value
-	v.valType = ERROR
+	v.ValType = ERROR
 
 	var length uint32
 	if err := binary.Read(r.reader, binary.LittleEndian, &length); err != nil {
@@ -87,7 +87,7 @@ func (r *ProtoReader) parseError() (*Value, error) {
 		return nil, err
 	}
 
-	v.str = string(strBuf)
+	v.Str = string(strBuf)
 
 	return &v, nil
 }

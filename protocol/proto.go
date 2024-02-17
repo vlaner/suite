@@ -28,13 +28,13 @@ func (bw *BufferWriter) Write(data any) {
 }
 
 type Value struct {
-	valType uint8
-	str     string
-	array   []*Value
+	ValType uint8
+	Str     string
+	Array   []*Value
 }
 
 func (v *Value) Marshal() ([]byte, error) {
-	switch v.valType {
+	switch v.ValType {
 	case BINARY_STRING:
 		return v.marshalString()
 	case ARRAY:
@@ -52,8 +52,8 @@ func (v *Value) marshalString() ([]byte, error) {
 		err: nil,
 	}
 	bw.Write(BINARY_STRING)
-	bw.Write(uint32(len(v.str)))
-	bw.Write([]byte(v.str))
+	bw.Write(uint32(len(v.Str)))
+	bw.Write([]byte(v.Str))
 
 	if bw.err != nil {
 		return nil, bw.err
@@ -68,9 +68,9 @@ func (v *Value) marshalArray() ([]byte, error) {
 		err: nil,
 	}
 	bw.Write(ARRAY)
-	bw.Write(uint32(len(v.array)))
+	bw.Write(uint32(len(v.Array)))
 
-	for _, v := range v.array {
+	for _, v := range v.Array {
 		b, err := v.Marshal()
 		if err != nil {
 			return nil, err
@@ -92,8 +92,8 @@ func (v *Value) marshalError() ([]byte, error) {
 		err: nil,
 	}
 	bw.Write(ERROR)
-	bw.Write(uint32(len(v.str)))
-	bw.Write([]byte(v.str))
+	bw.Write(uint32(len(v.Str)))
+	bw.Write([]byte(v.Str))
 
 	if bw.err != nil {
 		return nil, bw.err
