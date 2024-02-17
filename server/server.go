@@ -128,8 +128,6 @@ ReadLoop:
 			if strings.HasPrefix(command, "producer ") {
 				c := s.getClientById(id)
 				c.makeProducer()
-				topic := strings.Split(command, " ")[1]
-				s.exchange.Subscribe(broker.Topic(topic), c)
 			}
 
 			if strings.HasPrefix(command, "publish ") {
