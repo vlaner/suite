@@ -20,7 +20,7 @@ type TcpServer struct {
 	wg        sync.WaitGroup
 	quit      chan interface{}
 	clients   map[net.Conn]*Client
-	mu        sync.Mutex
+	mu        sync.RWMutex
 	exchange  *broker.Exchange
 	database  *database.Database
 	clientIds int
@@ -169,6 +169,9 @@ ReadLoop:
 }
 
 func (s *TcpServer) getClientById(id int) *Client {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	for _, c := range s.clients {
 		if c.id == id {
 			return c
