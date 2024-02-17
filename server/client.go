@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/vlaner/suite/broker"
+	"github.com/vlaner/suite/protocol"
 )
 
 // client kind
@@ -19,6 +20,7 @@ type Client struct {
 	conn net.Conn
 	kind int
 	e    *broker.Exchange
+	w    *protocol.Writer
 }
 
 func NewClient(id int, conn net.Conn, e *broker.Exchange) *Client {
@@ -27,6 +29,7 @@ func NewClient(id int, conn net.Conn, e *broker.Exchange) *Client {
 		conn: conn,
 		kind: UNASSIGNED,
 		e:    e,
+		w:    protocol.NewProtoWriter(conn),
 	}
 
 	return &client
@@ -46,8 +49,7 @@ func (c *Client) makeConsumer() {
 
 func (c Client) Consume(payload broker.Payload) {
 	if c.kind == CONSUMER {
-		_, err := c.conn.Write(append(payload.Data, []byte("\n")...))
-
+		err := c.w.Write(protocol.Value{ValType: protocol.BINARY_STRING, Str: string(payload.Data)})
 		if err != nil {
 			log.Printf("error writing payload bytes to %d: %s\n", c.id, err)
 		}

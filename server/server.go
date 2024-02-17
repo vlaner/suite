@@ -1,17 +1,16 @@
 package server
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/vlaner/suite/broker"
 	"github.com/vlaner/suite/database"
+	"github.com/vlaner/suite/protocol"
 )
 
 type TcpServer struct {
@@ -94,7 +93,8 @@ func (s *TcpServer) handleConn(conn net.Conn, id int) {
 		s.mu.Unlock()
 	}()
 
-	r := bufio.NewReader(conn)
+	r := protocol.NewProtoReader(conn)
+	w := protocol.NewProtoWriter(conn)
 ReadLoop:
 	for {
 		select {
@@ -102,7 +102,7 @@ ReadLoop:
 			return
 		default:
 			conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
-			b, _, err := r.ReadLine()
+			protoVal, err := r.ParseInput()
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
 					continue ReadLoop
@@ -111,56 +111,69 @@ ReadLoop:
 					return
 				}
 			}
-			if len(b) == 0 {
+			if protoVal == nil {
 				return
 			}
 
-			log.Printf("received from %v: %s, ID: %d", conn.RemoteAddr(), string(b), id)
+			log.Printf("received from %v: %+v, ID: %d", conn.RemoteAddr(), protoVal, id)
 
-			command := string(b)
-			if strings.HasPrefix(command, "consume ") {
+			command := protoVal.Array[0]
+			if command.Str == "consume" {
 				c := s.getClientById(id)
 				c.makeConsumer()
-				topic := strings.Split(command, " ")[1]
+				topic := protoVal.Array[1].Str
 				s.exchange.Subscribe(broker.Topic(topic), c)
 			}
 
-			if strings.HasPrefix(command, "producer ") {
+			if command.Str == "producer" {
 				c := s.getClientById(id)
 				c.makeProducer()
 			}
 
-			if strings.HasPrefix(command, "publish ") {
+			if command.Str == "publish" {
 				c := s.getClientById(id)
-				topic := strings.Split(command, " ")[1]
-				c.Publish(broker.Topic(topic), []byte(b[len("publish ")+len(topic)+1:]))
+				topic := protoVal.Array[1].Str
+				c.Publish(broker.Topic(topic), []byte(protoVal.Array[2].Str))
 			}
 
-			if strings.HasPrefix(command, "get ") {
-				entry, err := s.database.Get(b[len("gen "):])
+			if command.Str == "get" {
+				entry, err := s.database.Get([]byte(protoVal.Array[1].Str))
 				if err != nil {
-					conn.Write([]byte("key not found\n"))
+					if err := w.Write(protocol.Value{ValType: protocol.ERROR, Str: "key not found"}); err != nil {
+						log.Println("error writing to connection", err)
+						return
+					}
 					continue ReadLoop
 				}
-				conn.Write([]byte(fmt.Sprintf("key: %s; value: %s\n", entry.Key, entry.Value)))
+				if err := w.Write(protocol.Value{ValType: protocol.BINARY_STRING, Str: fmt.Sprintf("key: %s; value: %s", entry.Key, entry.Value)}); err != nil {
+					log.Println("error writing to connection", err)
+					return
+				}
 			}
 
-			if strings.HasPrefix(command, "set ") {
-				key := strings.Split(command, " ")[1]
-				value := []byte(b[len("set ")+len(key)+1:])
+			if command.Str == "set" {
+				key := protoVal.Array[1].Str
+				value := protoVal.Array[2].Str
 
 				err := s.database.Set([]byte(key), []byte(value))
 				if err != nil {
-					conn.Write([]byte("cannot set key\n"))
+					if err := w.Write(protocol.Value{ValType: protocol.ERROR, Str: "cannot set key"}); err != nil {
+						log.Println("error writing to connection", err)
+						return
+					}
+
 					continue ReadLoop
 				}
 			}
 
-			if strings.HasPrefix(command, "del ") {
-				key := strings.Split(command, " ")[1]
+			if command.Str == "del" {
+				key := protoVal.Array[1].Str
 				err := s.database.Delete([]byte(key))
 				if err != nil {
-					conn.Write([]byte("cannot delete key\n"))
+					if err := w.Write(protocol.Value{ValType: protocol.ERROR, Str: "cannot delete key"}); err != nil {
+						log.Println("error writing to connection", err)
+						return
+					}
 					continue ReadLoop
 				}
 			}

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bufio"
 	"bytes"
 	"net"
 	"os"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/vlaner/suite/broker"
 	"github.com/vlaner/suite/database"
+	"github.com/vlaner/suite/protocol"
 )
 
 const SERVER_ADDR = ":8000"
@@ -29,15 +29,15 @@ func (tc *testClient) Stop() {
 	tc.conn.Close()
 }
 func (tc *testClient) waitForMessages(t *testing.T, amount int) {
-	r := bufio.NewReader(tc.conn)
+	r := protocol.NewProtoReader(tc.conn)
 
 	for i := 0; i < amount; i++ {
-		b, _, err := r.ReadLine()
+		protoVal, err := r.ParseInput()
 		if err != nil {
-			t.Errorf("error reading from server: %s", err)
+			t.Errorf("error parsing input: %s", err)
 		}
 
-		tc.msgCh <- string(b)
+		tc.msgCh <- protoVal.Str
 	}
 
 	close(tc.msgCh)
@@ -66,6 +66,18 @@ func TestServerHandlesMessage(t *testing.T) {
 		t.Errorf("error connecting to server: %s", err)
 	}
 	defer c.Stop()
+	w := protocol.NewProtoWriter(c.conn)
+
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []*protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "teststring"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
 }
 
 func TestServerMessageExchange(t *testing.T) {
@@ -83,8 +95,19 @@ func TestServerMessageExchange(t *testing.T) {
 		t.Errorf("error connecting to server: %s", err)
 	}
 	defer c.Stop()
+	w := protocol.NewProtoWriter(c.conn)
 
-	c.conn.Write([]byte("consume TESTTOPIC\n"))
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []*protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "consume"},
+			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
 
 	msgsCount := 5
 	for i := 0; i < msgsCount; i++ {
@@ -110,19 +133,52 @@ func TestServerConsumerAndProducer(t *testing.T) {
 		t.Errorf("error connecting to server: %s", err)
 	}
 	defer consumer.Stop()
+	wConsumer := protocol.NewProtoWriter(consumer.conn)
 
 	producer, err := newTestClient(SERVER_ADDR)
 	if err != nil {
 		t.Errorf("error connecting to server: %s", err)
 	}
 	defer producer.Stop()
+	wProducer := protocol.NewProtoWriter(producer.conn)
 
-	consumer.conn.Write([]byte("consume TESTTOPIC\n"))
-	producer.conn.Write([]byte("producer TESTTOPIC\n"))
+	err = wConsumer.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []*protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "consume"},
+			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
+
+	err = wProducer.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []*protocol.Value{
+			{ValType: 1, Str: "producer"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
 
 	msgsCount := 5
 	for i := 0; i < msgsCount; i++ {
-		producer.conn.Write([]byte("publish TESTTOPIC data from producer over tcp\n"))
+		err = wProducer.Write(protocol.Value{
+			ValType: protocol.ARRAY,
+			Str:     "",
+			Array: []*protocol.Value{
+				{ValType: protocol.BINARY_STRING, Str: "publish"},
+				{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+				{ValType: protocol.BINARY_STRING, Str: "data from producer over tcp"},
+			},
+		})
+		if err != nil {
+			t.Errorf("error writing protocol data: %s", err)
+		}
 	}
 
 	go consumer.waitForMessages(t, msgsCount)
@@ -146,7 +202,19 @@ func TestServerClientReceivesPayloadInOrder(t *testing.T) {
 		t.Errorf("error connecting to server: %s", err)
 	}
 	defer c.Stop()
-	c.conn.Write([]byte("consume TESTTOPIC\n"))
+	w := protocol.NewProtoWriter(c.conn)
+
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []*protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "consume"},
+			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -184,13 +252,35 @@ func TestServerWithDatabaseGetSet(t *testing.T) {
 		t.Errorf("error connecting to server: %s", err)
 	}
 	defer c.Stop()
+	w := protocol.NewProtoWriter(c.conn)
 
-	c.conn.Write([]byte("set testkey testval test 2\n"))
-	c.conn.Write([]byte("get testkey\n"))
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Array: []*protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "set"},
+			{ValType: protocol.BINARY_STRING, Str: "testkey"},
+			{ValType: protocol.BINARY_STRING, Str: "testval test 2"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
+
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Array: []*protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "get"},
+			{ValType: protocol.BINARY_STRING, Str: "testkey"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
+
 	go c.waitForMessages(t, 1)
 	getResult := <-c.msgCh
 	if getResult != "key: testkey; value: testval test 2" {
-		t.Errorf("unexpected 'get' result from server, wanted 'key: testkey; value: testval' but got %s", getResult)
+		t.Errorf("unexpected 'get' result from server, wanted 'key: testkey; value: testval test 2' but got %s", getResult)
 	}
 }
 
@@ -214,7 +304,19 @@ func TestServerWithDatabaseGetError(t *testing.T) {
 	}
 	defer c.Stop()
 
-	c.conn.Write([]byte("get testkey\n"))
+	w := protocol.NewProtoWriter(c.conn)
+
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Array: []*protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "get"},
+			{ValType: protocol.BINARY_STRING, Str: "testkey"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
+
 	go c.waitForMessages(t, 1)
 	getResult := <-c.msgCh
 	if getResult != "key not found" {
@@ -241,8 +343,19 @@ func TestServerWithDatabaseDelError(t *testing.T) {
 		t.Errorf("error connecting to server: %s", err)
 	}
 	defer c.Stop()
+	w := protocol.NewProtoWriter(c.conn)
 
-	c.conn.Write([]byte("del testkey\n"))
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Array: []*protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "del"},
+			{ValType: protocol.BINARY_STRING, Str: "testkey"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
+
 	go c.waitForMessages(t, 1)
 	getResult := <-c.msgCh
 	if getResult != "cannot delete key" {
