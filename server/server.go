@@ -20,6 +20,7 @@ type TcpServer struct {
 	wg        sync.WaitGroup
 	quit      chan interface{}
 	clients   map[net.Conn]*Client
+	mu        sync.Mutex
 	exchange  *broker.Exchange
 	database  *database.Database
 	clientIds int
@@ -73,7 +74,9 @@ func (s *TcpServer) acceptLoop() {
 		}
 		s.clientIds++
 		client := NewClient(s.clientIds, conn, s.exchange)
+		s.mu.Lock()
 		s.clients[conn] = client
+		s.mu.Unlock()
 
 		s.wg.Add(1)
 		go func() {
@@ -86,7 +89,9 @@ func (s *TcpServer) acceptLoop() {
 func (s *TcpServer) handleConn(conn net.Conn, id int) {
 	defer func() {
 		conn.Close()
+		s.mu.Lock()
 		delete(s.clients, conn)
+		s.mu.Unlock()
 	}()
 
 	r := bufio.NewReader(conn)
