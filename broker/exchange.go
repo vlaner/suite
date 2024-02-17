@@ -52,16 +52,21 @@ func (e *Exchange) Publish(topic Topic, payload Payload) {
 }
 
 func (e *Exchange) ProcessMessage(msg Message) {
-	e.sync.Lock()
-	defer e.sync.Unlock()
-
-	consumer, exists := e.consumers[msg.topic]
-	if !exists {
-		e.deadMsgs <- msg
+	select {
+	case <-e.quit:
 		return
-	}
+	default:
+		e.sync.Lock()
+		defer e.sync.Unlock()
 
-	consumer.Consume(msg.payload)
+		consumer, exists := e.consumers[msg.topic]
+		if !exists {
+			e.deadMsgs <- msg
+			return
+		}
+
+		consumer.Consume(msg.payload)
+	}
 }
 
 func (e *Exchange) ListenForMessages() {
