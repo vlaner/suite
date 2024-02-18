@@ -5,7 +5,7 @@ import (
 )
 
 type Consumer interface {
-	Consume(Payload)
+	Consume(Payload) error
 }
 
 type PayloadConsumer struct{}

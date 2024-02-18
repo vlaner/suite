@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"log"
 	"sync"
 )
 
@@ -8,27 +9,23 @@ type Topic string
 
 type Exchange struct {
 	consumers map[Topic]Consumer
-	deadMsgs  chan Message
-	msgsCh    chan Message
 	wg        sync.WaitGroup
 	sync      sync.Mutex
 	quit      chan struct{}
+	msgsQueue *Queue
 }
 
 func NewExchange() *Exchange {
 	return &Exchange{
 		consumers: map[Topic]Consumer{},
-		deadMsgs:  make(chan Message, 100),
-		msgsCh:    make(chan Message, 100),
 		wg:        sync.WaitGroup{},
 		quit:      make(chan struct{}),
+		msgsQueue: NewQueue(),
 	}
 }
 
 func (e *Exchange) Stop() {
 	close(e.quit)
-	close(e.msgsCh)
-	close(e.deadMsgs)
 	e.wg.Wait()
 }
 
@@ -47,7 +44,7 @@ func (e *Exchange) Publish(topic Topic, payload Payload) {
 	case <-e.quit:
 		return
 	default:
-		e.msgsCh <- Message{topic: topic, payload: payload}
+		e.msgsQueue.Enqueue(&Message{topic: topic, payload: payload})
 	}
 }
 
@@ -61,11 +58,15 @@ func (e *Exchange) ProcessMessage(msg Message) {
 
 		consumer, exists := e.consumers[msg.topic]
 		if !exists {
-			e.deadMsgs <- msg
+			e.msgsQueue.EnqueueFront(&msg)
 			return
 		}
 
-		consumer.Consume(msg.payload)
+		err := consumer.Consume(msg.payload)
+		if err != nil {
+			log.Println("consumer error:", err)
+			// e.Publish(msg.topic, msg.payload)
+		}
 	}
 }
 
@@ -75,23 +76,10 @@ func (e *Exchange) ListenForMessages() {
 			select {
 			case <-e.quit:
 				return
-			case msg := <-e.deadMsgs:
+			default:
 				e.wg.Add(1)
-				e.ProcessMessage(msg)
-				e.wg.Done()
-
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			select {
-			case <-e.quit:
-				return
-			case message := <-e.msgsCh:
-				e.wg.Add(1)
-				e.ProcessMessage(message)
+				message := e.msgsQueue.Dequeue()
+				e.ProcessMessage(*message)
 				e.wg.Done()
 			}
 		}

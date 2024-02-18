@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"net"
 
@@ -47,13 +48,16 @@ func (c *Client) makeConsumer() {
 	}
 }
 
-func (c Client) Consume(payload broker.Payload) {
+func (c Client) Consume(payload broker.Payload) error {
 	if c.kind == CONSUMER {
 		err := c.w.Write(protocol.Value{ValType: protocol.BINARY_STRING, Str: string(payload.Data)})
 		if err != nil {
 			log.Printf("error writing payload bytes to %d: %s\n", c.id, err)
+			return fmt.Errorf("error consuming message: %w", err)
 		}
 	}
+
+	return nil
 }
 
 func (c Client) Publish(topic broker.Topic, data []byte) {

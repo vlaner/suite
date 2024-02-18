@@ -20,8 +20,9 @@ func newTestConsumer() *testConsumer {
 	}
 }
 
-func (c testConsumer) Consume(payload Payload) {
+func (c testConsumer) Consume(payload Payload) error {
 	c.gotMsgs <- payload.Data
+	return nil
 }
 
 func TestBasicConsume(t *testing.T) {
