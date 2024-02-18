@@ -30,7 +30,7 @@ func (bw *BufferWriter) Write(data any) {
 type Value struct {
 	ValType uint8
 	Str     string
-	Array   []*Value
+	Array   []Value
 }
 
 func (v *Value) Marshal() ([]byte, error) {

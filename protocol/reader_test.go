@@ -39,7 +39,7 @@ func TestParseArrayOfBinaryString(t *testing.T) {
 	input := Value{
 		ValType: ARRAY,
 		Str:     "",
-		Array: []*Value{
+		Array: []Value{
 			{ValType: BINARY_STRING, Str: "test1"},
 			{ValType: BINARY_STRING, Str: "test2"},
 			{ValType: BINARY_STRING, Str: "test3"},

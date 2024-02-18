@@ -71,7 +71,7 @@ func TestServerHandlesMessage(t *testing.T) {
 	err = w.Write(protocol.Value{
 		ValType: protocol.ARRAY,
 		Str:     "",
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: protocol.BINARY_STRING, Str: "teststring"},
 		},
 	})
@@ -100,7 +100,7 @@ func TestServerMessageExchange(t *testing.T) {
 	err = w.Write(protocol.Value{
 		ValType: protocol.ARRAY,
 		Str:     "",
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: protocol.BINARY_STRING, Str: "consume"},
 			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
 		},
@@ -145,7 +145,7 @@ func TestServerConsumerAndProducer(t *testing.T) {
 	err = wConsumer.Write(protocol.Value{
 		ValType: protocol.ARRAY,
 		Str:     "",
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: protocol.BINARY_STRING, Str: "consume"},
 			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
 		},
@@ -157,7 +157,7 @@ func TestServerConsumerAndProducer(t *testing.T) {
 	err = wProducer.Write(protocol.Value{
 		ValType: protocol.ARRAY,
 		Str:     "",
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: 1, Str: "producer"},
 		},
 	})
@@ -170,7 +170,7 @@ func TestServerConsumerAndProducer(t *testing.T) {
 		err = wProducer.Write(protocol.Value{
 			ValType: protocol.ARRAY,
 			Str:     "",
-			Array: []*protocol.Value{
+			Array: []protocol.Value{
 				{ValType: protocol.BINARY_STRING, Str: "publish"},
 				{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
 				{ValType: protocol.BINARY_STRING, Str: "data from producer over tcp"},
@@ -207,7 +207,7 @@ func TestServerClientReceivesPayloadInOrder(t *testing.T) {
 	err = w.Write(protocol.Value{
 		ValType: protocol.ARRAY,
 		Str:     "",
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: protocol.BINARY_STRING, Str: "consume"},
 			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
 		},
@@ -256,7 +256,7 @@ func TestServerWithDatabaseGetSet(t *testing.T) {
 
 	err = w.Write(protocol.Value{
 		ValType: protocol.ARRAY,
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: protocol.BINARY_STRING, Str: "set"},
 			{ValType: protocol.BINARY_STRING, Str: "testkey"},
 			{ValType: protocol.BINARY_STRING, Str: "testval test 2"},
@@ -268,7 +268,7 @@ func TestServerWithDatabaseGetSet(t *testing.T) {
 
 	err = w.Write(protocol.Value{
 		ValType: protocol.ARRAY,
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: protocol.BINARY_STRING, Str: "get"},
 			{ValType: protocol.BINARY_STRING, Str: "testkey"},
 		},
@@ -308,7 +308,7 @@ func TestServerWithDatabaseGetError(t *testing.T) {
 
 	err = w.Write(protocol.Value{
 		ValType: protocol.ARRAY,
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: protocol.BINARY_STRING, Str: "get"},
 			{ValType: protocol.BINARY_STRING, Str: "testkey"},
 		},
@@ -347,7 +347,7 @@ func TestServerWithDatabaseDelError(t *testing.T) {
 
 	err = w.Write(protocol.Value{
 		ValType: protocol.ARRAY,
-		Array: []*protocol.Value{
+		Array: []protocol.Value{
 			{ValType: protocol.BINARY_STRING, Str: "del"},
 			{ValType: protocol.BINARY_STRING, Str: "testkey"},
 		},

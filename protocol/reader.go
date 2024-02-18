@@ -61,13 +61,13 @@ func (r *ProtoReader) parseArray() (*Value, error) {
 		return nil, err
 	}
 
-	v.Array = make([]*Value, length)
+	v.Array = make([]Value, length)
 	for i := 0; i < int(length); i++ {
 		val, err := r.ParseInput()
 		if err != nil {
 			return nil, err
 		}
-		v.Array[i] = val
+		v.Array[i] = *val
 	}
 
 	return &v, nil
