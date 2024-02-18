@@ -6,7 +6,6 @@ import (
 	"os"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/vlaner/suite/broker"
 	"github.com/vlaner/suite/database"
@@ -215,8 +214,6 @@ func TestServerClientReceivesPayloadInOrder(t *testing.T) {
 	if err != nil {
 		t.Errorf("error writing protocol data: %s", err)
 	}
-
-	time.Sleep(10 * time.Millisecond)
 
 	msgsCount := 50
 	for i := 0; i < msgsCount; i++ {
