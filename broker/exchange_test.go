@@ -29,7 +29,6 @@ func TestBasicConsume(t *testing.T) {
 	c := newTestConsumer()
 	topic := Topic("test")
 	e := NewExchange()
-	e.ListenForMessages()
 
 	e.Subscribe(topic, c)
 
@@ -46,7 +45,6 @@ func TestSeveralMessages(t *testing.T) {
 
 	topic := Topic("test")
 	e := NewExchange()
-	e.ListenForMessages()
 
 	e.Subscribe(topic, c)
 
@@ -70,7 +68,6 @@ func TestExchangeWithProducer(t *testing.T) {
 
 	c := newTestConsumer()
 	p := PayloadProducer{e: e}
-	e.ListenForMessages()
 
 	e.Subscribe(topic, c)
 
@@ -93,7 +90,6 @@ func TestExchangeStopWorks(t *testing.T) {
 
 	topic := Topic("test")
 	e := NewExchange()
-	e.ListenForMessages()
 
 	e.Subscribe(topic, c)
 

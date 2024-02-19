@@ -5,27 +5,87 @@ import (
 	"sync"
 )
 
+type ConsumerQueue struct {
+	c    Consumer
+	q    *Queue
+	quit chan struct{}
+	mu   sync.Mutex
+}
+
+func (cq *ConsumerQueue) listenForMessages() {
+	for {
+		select {
+		case <-cq.quit:
+			return
+		default:
+			message := cq.q.Dequeue()
+			cq.processMessage(*message)
+		}
+	}
+}
+
+func (cq *ConsumerQueue) processMessage(msg Message) {
+	cq.mu.Lock()
+	defer cq.mu.Unlock()
+
+	select {
+	case <-cq.quit:
+		return
+	default:
+		// TODO: convert to signal -> when consumer is added/removed
+		if cq.c == nil {
+			log.Println("consumer is nil")
+			cq.q.EnqueueFront(&msg)
+			return
+		}
+
+		err := cq.c.Consume(msg.payload)
+		if err != nil {
+			cq.q.EnqueueFront(&msg)
+			log.Println("consumer error:", err)
+		}
+	}
+}
+
+func NewConsumerQueue(c Consumer) *ConsumerQueue {
+	cq := ConsumerQueue{
+		c:    c,
+		q:    NewQueue(),
+		quit: make(chan struct{}),
+		mu:   sync.Mutex{},
+	}
+
+	go cq.listenForMessages()
+
+	return &cq
+}
+
 type Topic string
 
 type Exchange struct {
-	consumers map[Topic]Consumer
+	consumers map[Topic]*ConsumerQueue
 	wg        sync.WaitGroup
 	sync      sync.Mutex
 	quit      chan struct{}
-	msgsQueue *Queue
 }
 
 func NewExchange() *Exchange {
 	return &Exchange{
-		consumers: map[Topic]Consumer{},
+		consumers: map[Topic]*ConsumerQueue{},
 		wg:        sync.WaitGroup{},
 		quit:      make(chan struct{}),
-		msgsQueue: NewQueue(),
 	}
 }
 
 func (e *Exchange) Stop() {
 	close(e.quit)
+	e.sync.Lock()
+	defer e.sync.Unlock()
+
+	for _, c := range e.consumers {
+		c.quit <- struct{}{}
+	}
+
 	e.wg.Wait()
 }
 
@@ -33,55 +93,33 @@ func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 	e.sync.Lock()
 	defer e.sync.Unlock()
 
-	_, exists := e.consumers[topic]
+	cons, exists := e.consumers[topic]
 	if !exists {
-		e.consumers[topic] = c
+		cq := NewConsumerQueue(c)
+		e.consumers[topic] = cq
+		return
 	}
+
+	cons.c = c
+	e.consumers[topic] = cons
 }
 
 func (e *Exchange) Publish(topic Topic, payload Payload) {
+	e.sync.Lock()
+	defer e.sync.Unlock()
+
 	select {
 	case <-e.quit:
 		return
 	default:
-		e.msgsQueue.Enqueue(&Message{topic: topic, payload: payload})
-	}
-}
-
-func (e *Exchange) ProcessMessage(msg Message) {
-	select {
-	case <-e.quit:
-		return
-	default:
-		e.sync.Lock()
-		defer e.sync.Unlock()
-
-		consumer, exists := e.consumers[msg.topic]
+		c, exists := e.consumers[topic]
 		if !exists {
-			e.msgsQueue.EnqueueFront(&msg)
+			cq := NewConsumerQueue(nil)
+			e.consumers[topic] = cq
+			cq.q.Enqueue(&Message{topic: topic, payload: payload})
 			return
 		}
 
-		err := consumer.Consume(msg.payload)
-		if err != nil {
-			log.Println("consumer error:", err)
-			// e.Publish(msg.topic, msg.payload)
-		}
+		c.q.Enqueue(&Message{topic: topic, payload: payload})
 	}
-}
-
-func (e *Exchange) ListenForMessages() {
-	go func() {
-		for {
-			select {
-			case <-e.quit:
-				return
-			default:
-				e.wg.Add(1)
-				message := e.msgsQueue.Dequeue()
-				e.ProcessMessage(*message)
-				e.wg.Done()
-			}
-		}
-	}()
 }

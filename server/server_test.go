@@ -81,7 +81,6 @@ func TestServerHandlesMessage(t *testing.T) {
 
 func TestServerMessageExchange(t *testing.T) {
 	e := broker.NewExchange()
-	e.ListenForMessages()
 
 	topic := broker.Topic("TESTTOPIC")
 
@@ -121,7 +120,6 @@ func TestServerMessageExchange(t *testing.T) {
 
 func TestServerConsumerAndProducer(t *testing.T) {
 	e := broker.NewExchange()
-	e.ListenForMessages()
 
 	srv := NewTcpServer(SERVER_ADDR, e, nil)
 	srv.Start()
@@ -188,7 +186,7 @@ func TestServerConsumerAndProducer(t *testing.T) {
 
 func TestServerClientReceivesPayloadInOrder(t *testing.T) {
 	e := broker.NewExchange()
-	e.ListenForMessages()
+
 	topic := broker.Topic("TESTTOPIC")
 
 	srv := NewTcpServer(SERVER_ADDR, e, nil)
