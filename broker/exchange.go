@@ -6,10 +6,11 @@ import (
 )
 
 type ConsumerQueue struct {
-	c    Consumer
-	q    *Queue
-	quit chan struct{}
-	mu   sync.Mutex
+	c      Consumer
+	q      *Queue
+	quit   chan struct{}
+	mu     *sync.Mutex
+	signal *sync.Cond
 }
 
 func (cq *ConsumerQueue) listenForMessages() {
@@ -18,26 +19,25 @@ func (cq *ConsumerQueue) listenForMessages() {
 		case <-cq.quit:
 			return
 		default:
+			cq.mu.Lock()
+
+			for cq.c == nil {
+				cq.signal.Wait()
+			}
+
 			message := cq.q.Dequeue()
 			cq.processMessage(*message)
+
+			cq.mu.Unlock()
 		}
 	}
 }
 
 func (cq *ConsumerQueue) processMessage(msg Message) {
-	cq.mu.Lock()
-	defer cq.mu.Unlock()
-
 	select {
 	case <-cq.quit:
 		return
 	default:
-		// TODO: convert to signal -> when consumer is added/removed
-		if cq.c == nil {
-			log.Println("consumer is nil")
-			cq.q.EnqueueFront(&msg)
-			return
-		}
 
 		err := cq.c.Consume(msg.payload)
 		if err != nil {
@@ -48,11 +48,13 @@ func (cq *ConsumerQueue) processMessage(msg Message) {
 }
 
 func NewConsumerQueue(c Consumer) *ConsumerQueue {
+	mu := &sync.Mutex{}
 	cq := ConsumerQueue{
-		c:    c,
-		q:    NewQueue(),
-		quit: make(chan struct{}),
-		mu:   sync.Mutex{},
+		c:      c,
+		q:      NewQueue(),
+		quit:   make(chan struct{}),
+		mu:     mu,
+		signal: sync.NewCond(mu),
 	}
 
 	go cq.listenForMessages()
@@ -97,11 +99,13 @@ func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 	if !exists {
 		cq := NewConsumerQueue(c)
 		e.consumers[topic] = cq
+		cq.signal.Broadcast()
 		return
 	}
 
 	cons.c = c
 	e.consumers[topic] = cons
+	cons.signal.Broadcast()
 }
 
 func (e *Exchange) Publish(topic Topic, payload Payload) {
