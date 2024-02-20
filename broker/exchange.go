@@ -3,6 +3,8 @@ package broker
 import (
 	"log"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 type ConsumerQueue struct {
@@ -39,7 +41,7 @@ func (cq *ConsumerQueue) processMessage(msg Message) {
 		return
 	default:
 
-		err := cq.c.Consume(msg.payload)
+		err := cq.c.Consume(msg)
 		if err != nil {
 			cq.q.EnqueueFront(&msg)
 			log.Println("consumer error:", err)
@@ -108,7 +110,7 @@ func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 	cons.signal.Broadcast()
 }
 
-func (e *Exchange) Publish(topic Topic, payload Payload) {
+func (e *Exchange) Publish(topic Topic, data []byte) {
 	e.sync.Lock()
 	defer e.sync.Unlock()
 
@@ -116,14 +118,16 @@ func (e *Exchange) Publish(topic Topic, payload Payload) {
 	case <-e.quit:
 		return
 	default:
+		message := newMessage(uuid.New(), topic, data)
+
 		c, exists := e.consumers[topic]
 		if !exists {
 			cq := NewConsumerQueue(nil)
 			e.consumers[topic] = cq
-			cq.q.Enqueue(&Message{topic: topic, payload: payload})
+			cq.q.Enqueue(message)
 			return
 		}
 
-		c.q.Enqueue(&Message{topic: topic, payload: payload})
+		c.q.Enqueue(message)
 	}
 }

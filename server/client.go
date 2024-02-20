@@ -48,9 +48,9 @@ func (c *Client) makeConsumer() {
 	}
 }
 
-func (c Client) Consume(payload broker.Payload) error {
+func (c Client) Consume(msg broker.Message) error {
 	if c.kind == CONSUMER {
-		err := c.w.Write(protocol.Value{ValType: protocol.BINARY_STRING, Str: string(payload.Data)})
+		err := c.w.Write(protocol.Value{ValType: protocol.BINARY_STRING, Str: string(msg.Data)})
 		if err != nil {
 			log.Printf("error writing payload bytes to %d: %s\n", c.id, err)
 			return fmt.Errorf("error consuming message: %w", err)
@@ -62,6 +62,6 @@ func (c Client) Consume(payload broker.Payload) error {
 
 func (c Client) Publish(topic broker.Topic, data []byte) {
 	if c.kind == PRODUCER {
-		c.e.Publish(topic, broker.Payload{Data: data})
+		c.e.Publish(topic, data)
 	}
 }

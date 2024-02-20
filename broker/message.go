@@ -1,10 +1,17 @@
 package broker
 
+import "github.com/google/uuid"
+
 type Message struct {
-	topic   Topic
-	payload Payload
+	Id    uuid.UUID
+	Topic Topic
+	Data  []byte
 }
 
-type Payload struct {
-	Data []byte
+func newMessage(id uuid.UUID, topic Topic, data []byte) *Message {
+	return &Message{
+		Id:    id,
+		Topic: topic,
+		Data:  data,
+	}
 }

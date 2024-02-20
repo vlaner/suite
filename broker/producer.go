@@ -9,5 +9,5 @@ type PayloadProducer struct {
 }
 
 func (p *PayloadProducer) Publish(topic Topic, data []byte) {
-	p.e.Publish(topic, Payload{Data: data})
+	p.e.Publish(topic, data)
 }

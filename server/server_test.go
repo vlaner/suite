@@ -109,7 +109,7 @@ func TestServerMessageExchange(t *testing.T) {
 
 	msgsCount := 5
 	for i := 0; i < msgsCount; i++ {
-		e.Publish(topic, broker.Payload{Data: []byte("testing tcp send directly from exchange")})
+		e.Publish(topic, []byte("testing tcp send directly from exchange"))
 	}
 
 	go c.waitForMessages(t, msgsCount)
@@ -215,7 +215,7 @@ func TestServerClientReceivesPayloadInOrder(t *testing.T) {
 
 	msgsCount := 50
 	for i := 0; i < msgsCount; i++ {
-		e.Publish(topic, broker.Payload{Data: append([]byte("message #"), intToBytes(i)...)})
+		e.Publish(topic, append([]byte("message #"), intToBytes(i)...))
 	}
 
 	go c.waitForMessages(t, msgsCount)

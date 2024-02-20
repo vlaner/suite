@@ -20,8 +20,8 @@ func newTestConsumer() *testConsumer {
 	}
 }
 
-func (c testConsumer) Consume(payload Payload) error {
-	c.gotMsgs <- payload.Data
+func (c testConsumer) Consume(msg Message) error {
+	c.gotMsgs <- msg.Data
 	return nil
 }
 
@@ -32,7 +32,7 @@ func TestBasicConsume(t *testing.T) {
 
 	e.Subscribe(topic, c)
 
-	e.Publish(topic, Payload{[]byte("testdata")})
+	e.Publish(topic, []byte("testdata"))
 
 	gotData := <-c.gotMsgs
 	if !bytes.Equal(gotData, []byte("testdata")) {
@@ -50,7 +50,7 @@ func TestSeveralMessages(t *testing.T) {
 
 	for i := 0; i < 30; i++ {
 		payloadBytes := append([]byte("testdata"), intToBytes(i)...)
-		e.Publish(topic, Payload{Data: payloadBytes})
+		e.Publish(topic, payloadBytes)
 	}
 
 	for i := 0; i < 30; i++ {
@@ -93,7 +93,7 @@ func TestExchangeStopWorks(t *testing.T) {
 
 	e.Subscribe(topic, c)
 
-	e.Publish(topic, Payload{[]byte("testdata")})
+	e.Publish(topic, []byte("testdata"))
 	e.Stop()
-	e.Publish(topic, Payload{[]byte("testdata")})
+	e.Publish(topic, []byte("testdata"))
 }
