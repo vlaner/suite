@@ -97,3 +97,21 @@ func TestExchangeStopWorks(t *testing.T) {
 	e.Stop()
 	e.Publish(topic, []byte("testdata"))
 }
+
+func TestExchangeSubscibeSecondCosnumerShouldNotWork(t *testing.T) {
+	c := newTestConsumer()
+	c2 := newTestConsumer()
+	go func() {
+		<-c2.gotMsgs
+		t.Errorf("receiving message should not happen")
+	}()
+
+	topic := Topic("test")
+	e := NewExchange()
+
+	e.Subscribe(topic, c)
+	e.Subscribe(topic, c2)
+
+	e.Publish(topic, []byte("testdata"))
+	<-c.gotMsgs
+}

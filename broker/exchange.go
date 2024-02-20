@@ -104,10 +104,11 @@ func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 		cq.signal.Broadcast()
 		return
 	}
-
-	cons.c = c
-	e.consumers[topic] = cons
-	cons.signal.Broadcast()
+	if cons.c == nil {
+		cons.c = c
+		e.consumers[topic] = cons
+		cons.signal.Broadcast()
+	}
 }
 
 func (e *Exchange) Publish(topic Topic, data []byte) {
