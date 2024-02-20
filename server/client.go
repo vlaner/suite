@@ -50,7 +50,16 @@ func (c *Client) makeConsumer() {
 
 func (c Client) Consume(msg broker.Message) error {
 	if c.kind == CONSUMER {
-		err := c.w.Write(protocol.Value{ValType: protocol.BINARY_STRING, Str: string(msg.Data)})
+		err := c.w.Write(
+			protocol.Value{ValType: protocol.ARRAY, Array: []protocol.Value{
+				{ValType: protocol.BINARY_STRING, Str: "realm"},
+				{ValType: protocol.BINARY_STRING, Str: "broker"},
+				{ValType: protocol.BINARY_STRING, Str: "message_id"},
+				{ValType: protocol.BINARY_STRING, Str: msg.Id.String()},
+				{ValType: protocol.BINARY_STRING, Str: "data"},
+				{ValType: protocol.BINARY_STRING, Str: string(msg.Data)},
+			}})
+
 		if err != nil {
 			log.Printf("error writing payload bytes to %d: %s\n", c.id, err)
 			return fmt.Errorf("error consuming message: %w", err)

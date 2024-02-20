@@ -21,7 +21,7 @@ func intToBytes(i int) []byte {
 type testClient struct {
 	id    int
 	conn  net.Conn
-	msgCh chan string
+	msgCh chan protocol.Value
 }
 
 func (tc *testClient) Stop() {
@@ -35,8 +35,8 @@ func (tc *testClient) waitForMessages(t *testing.T, amount int) {
 		if err != nil {
 			t.Errorf("error parsing input: %s", err)
 		}
+		tc.msgCh <- *protoVal
 
-		tc.msgCh <- protoVal.Str
 	}
 
 	close(tc.msgCh)
@@ -50,7 +50,7 @@ func newTestClient(srvAddr string) (*testClient, error) {
 
 	return &testClient{
 		conn:  conn,
-		msgCh: make(chan string),
+		msgCh: make(chan protocol.Value),
 	}, nil
 }
 
@@ -114,7 +114,7 @@ func TestServerMessageExchange(t *testing.T) {
 
 	go c.waitForMessages(t, msgsCount)
 	for msg := range c.msgCh {
-		t.Logf("got message from server: %s", msg)
+		t.Logf("got message from server: %+v", msg)
 	}
 }
 
@@ -180,7 +180,7 @@ func TestServerConsumerAndProducer(t *testing.T) {
 
 	go consumer.waitForMessages(t, msgsCount)
 	for msg := range consumer.msgCh {
-		t.Logf("got message from server: %s", msg)
+		t.Logf("got message from server: %+v", msg)
 	}
 }
 
@@ -222,8 +222,8 @@ func TestServerClientReceivesPayloadInOrder(t *testing.T) {
 	for i := 0; i < msgsCount; i++ {
 		gotData := <-c.msgCh
 		want := append([]byte("message #"), intToBytes(i)...)
-		if !bytes.Equal([]byte(gotData), want) {
-			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), string(gotData))
+		if !bytes.Equal([]byte(gotData.Array[5].Str), want) {
+			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), gotData.Array[5].Str)
 		}
 	}
 }
@@ -274,8 +274,10 @@ func TestServerWithDatabaseGetSet(t *testing.T) {
 
 	go c.waitForMessages(t, 1)
 	getResult := <-c.msgCh
-	if getResult != "key: testkey; value: testval test 2" {
-		t.Errorf("unexpected 'get' result from server, wanted 'key: testkey; value: testval test 2' but got %s", getResult)
+	gotKey := []byte(getResult.Array[2].Str)
+	gotValue := []byte(getResult.Array[3].Str)
+	if !bytes.Equal(gotKey, []byte("testkey")) || !bytes.Equal(gotValue, []byte("testval test 2")) {
+		t.Errorf("unexpected 'get' result from server, wanted key be: 'testkey' but got %s, want value be: 'testval test 2' but got %s", gotKey, gotValue)
 	}
 }
 
@@ -314,8 +316,8 @@ func TestServerWithDatabaseGetError(t *testing.T) {
 
 	go c.waitForMessages(t, 1)
 	getResult := <-c.msgCh
-	if getResult != "key not found" {
-		t.Errorf("unexpected 'get' result from server, wanted 'key not found' but got %s", getResult)
+	if getResult.Str != "key not found" {
+		t.Errorf("unexpected 'get' result from server, wanted 'key not found' but got %s", getResult.Str)
 	}
 }
 
@@ -353,7 +355,7 @@ func TestServerWithDatabaseDelError(t *testing.T) {
 
 	go c.waitForMessages(t, 1)
 	getResult := <-c.msgCh
-	if getResult != "cannot delete key" {
-		t.Errorf("unexpected 'get' result from server, wanted 'cannot delete key' but got %s", getResult)
+	if getResult.Str != "cannot delete key" {
+		t.Errorf("unexpected 'get' result from server, wanted 'cannot delete key' but got %s", getResult.Str)
 	}
 }

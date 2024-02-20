@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -145,7 +144,12 @@ ReadLoop:
 					}
 					continue ReadLoop
 				}
-				if err := w.Write(protocol.Value{ValType: protocol.BINARY_STRING, Str: fmt.Sprintf("key: %s; value: %s", entry.Key, entry.Value)}); err != nil {
+				if err := w.Write(protocol.Value{ValType: protocol.ARRAY, Array: []protocol.Value{
+					{ValType: protocol.BINARY_STRING, Str: "realm"},
+					{ValType: protocol.BINARY_STRING, Str: "database"},
+					{ValType: protocol.BINARY_STRING, Str: string(entry.Key)},
+					{ValType: protocol.BINARY_STRING, Str: string(entry.Value)},
+				}}); err != nil {
 					log.Println("error writing to connection", err)
 					return
 				}
