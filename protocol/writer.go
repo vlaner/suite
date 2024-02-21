@@ -15,9 +15,11 @@ func (w Writer) Write(v Value) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = w.writer.Write(b)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

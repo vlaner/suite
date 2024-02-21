@@ -202,5 +202,6 @@ func (s *TcpServer) getClientById(id int) *Client {
 			return c
 		}
 	}
+
 	return nil
 }

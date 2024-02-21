@@ -60,7 +60,6 @@ func (c Client) Consume(msg broker.Message) error {
 				{ValType: protocol.BINARY_STRING, Str: "data"},
 				{ValType: protocol.BINARY_STRING, Str: string(msg.Data)},
 			}})
-
 		if err != nil {
 			log.Printf("error writing payload bytes to %d: %s\n", c.id, err)
 			return fmt.Errorf("error consuming message: %w", err)

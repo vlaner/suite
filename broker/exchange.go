@@ -42,7 +42,6 @@ func (cq *ConsumerQueue) processMessage(msg Message) {
 	case <-cq.quit:
 		return
 	default:
-
 		err := cq.c.Consume(msg)
 		if err != nil {
 			cq.q.EnqueueFront(&msg)
