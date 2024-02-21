@@ -192,3 +192,42 @@ func TestExchangeWithGoroutinesDataRace(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestExchangeUnsubscibe(t *testing.T) {
+	e := NewExchange()
+
+	c := newTestConsumer(e)
+	topic := Topic("test")
+
+	e.Subscribe(topic, c)
+	e.Publish(topic, []byte("testdata"))
+	<-c.gotMsgs
+
+	e.Unsubscribe(topic)
+	e.Publish(topic, []byte("testdata1"))
+	e.Publish(topic, []byte("testdata2"))
+	e.Publish(topic, []byte("testdata3"))
+
+	if e.consumers[topic].c.Load() != nil {
+		t.Errorf("consumer must be nil after unsubscribe")
+	}
+
+	go func() {
+		select {
+		case <-c.gotMsgs:
+			t.Error("should be blocked")
+		default:
+			return
+		}
+	}()
+
+	e.Subscribe(topic, c)
+
+	for i := 1; i <= 3; i++ {
+		gotData := <-c.gotMsgs
+		want := append([]byte("testdata"), intToBytes(i)...)
+		if !bytes.Equal(gotData.Data, want) {
+			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), string(gotData.Data))
+		}
+	}
+}

@@ -80,3 +80,9 @@ func (c Client) Ack(topic broker.Topic, msgId uuid.UUID) {
 		c.e.Ack(topic, msgId)
 	}
 }
+
+func (c Client) Unsubscribe(topic broker.Topic) {
+	if c.kind == CONSUMER {
+		c.e.Unsubscribe(topic)
+	}
+}

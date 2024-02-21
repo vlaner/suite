@@ -143,6 +143,12 @@ ReadLoop:
 				c.Ack(broker.Topic(topic), uuid.MustParse(msgId))
 			}
 
+			if command.Str == "unsub" {
+				c := s.getClientById(id)
+				topic := protoVal.Array[1].Str
+				c.Unsubscribe(broker.Topic(topic))
+			}
+
 			if command.Str == "get" {
 				entry, err := s.database.Get([]byte(protoVal.Array[1].Str))
 				if err != nil {

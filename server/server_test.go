@@ -286,6 +286,82 @@ func TestServerClientAckMessage(t *testing.T) {
 	}
 }
 
+func TestServerClientUnsubscibe(t *testing.T) {
+	e := broker.NewExchange()
+
+	topic := broker.Topic("TESTTOPIC")
+
+	srv := NewTcpServer(SERVER_ADDR, e, nil)
+
+	srv.Start()
+	defer srv.Stop()
+
+	c, err := newTestClient(SERVER_ADDR)
+	if err != nil {
+		t.Errorf("error connecting to server: %s", err)
+	}
+	defer c.Stop()
+
+	w := protocol.NewProtoWriter(c.conn)
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "consume"},
+			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
+
+	e.Publish(topic, []byte("message #1"))
+	go c.waitForMessages(t, 1)
+	<-c.msgCh
+
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "unsub"},
+			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+		},
+	})
+
+	c2, err := newTestClient(SERVER_ADDR)
+	if err != nil {
+		t.Errorf("error connecting to server: %s", err)
+	}
+	defer c.Stop()
+
+	w = protocol.NewProtoWriter(c2.conn)
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "consume"},
+			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
+
+	e.Publish(topic, []byte("message #1"))
+	e.Publish(topic, []byte("message #2"))
+	e.Publish(topic, []byte("message #3"))
+
+	go c2.waitForMessages(t, 3)
+	for i := 1; i <= 3; i++ {
+		gotData := <-c2.msgCh
+		want := append([]byte("message #"), intToBytes(i)...)
+		if !bytes.Equal([]byte(gotData.Array[5].Str), want) {
+			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), gotData.Str)
+		}
+	}
+
+}
+
 func TestServerWithDatabaseGetSet(t *testing.T) {
 	dirPath := "testdb"
 	defer os.RemoveAll(dirPath)

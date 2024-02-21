@@ -10,7 +10,7 @@ import (
 
 type ConsumerQueue struct {
 	// c - 'Consumer' interface
-	c           atomic.Value
+	c           atomic.Pointer[Consumer]
 	q           *Queue
 	unackedMsgs []Message
 	quit        chan struct{}
@@ -49,9 +49,13 @@ func (cq *ConsumerQueue) processMessage(msg Message) {
 	case <-cq.quit:
 		return
 	default:
-		err := (cq.c.Load().(Consumer)).Consume(msg)
-		if err != nil {
+		c := cq.c.Load()
+		if c == nil {
 			cq.q.EnqueueFront(&msg)
+			return
+		}
+		err := (*c).Consume(msg)
+		if err != nil {
 			log.Println("consumer error:", err)
 		}
 	}
@@ -70,7 +74,7 @@ func (cq *ConsumerQueue) ack(msgId uuid.UUID) {
 
 func NewConsumerQueue(c Consumer) *ConsumerQueue {
 	cq := ConsumerQueue{
-		c:      atomic.Value{},
+		c:      atomic.Pointer[Consumer]{},
 		q:      NewQueue(),
 		quit:   make(chan struct{}),
 		mu:     &sync.Mutex{},
@@ -79,7 +83,7 @@ func NewConsumerQueue(c Consumer) *ConsumerQueue {
 	}
 
 	if c != nil {
-		cq.c.Store(c)
+		cq.c.Store(&c)
 	}
 
 	go cq.listenForMessages()
@@ -129,10 +133,22 @@ func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 	}
 
 	if cons.c.Load() == nil {
-		cons.c.Store(c)
+		cons.c.Store(&c)
 		e.consumers[topic] = cons
 		cons.signal.Broadcast()
 	}
+}
+
+func (e *Exchange) Unsubscribe(topic Topic) {
+	e.sync.Lock()
+	defer e.sync.Unlock()
+
+	cons, exists := e.consumers[topic]
+	if !exists {
+		return
+	}
+
+	cons.c.Store(nil)
 }
 
 func (e *Exchange) Publish(topic Topic, data []byte) {
