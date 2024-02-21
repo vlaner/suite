@@ -3,12 +3,14 @@ package broker
 import (
 	"log"
 	"sync"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 )
 
 type ConsumerQueue struct {
-	c           Consumer
+	// c - 'Consumer' interface
+	c           atomic.Value
 	q           *Queue
 	unackedMsgs []Message
 	quit        chan struct{}
@@ -25,7 +27,7 @@ func (cq *ConsumerQueue) listenForMessages() {
 		default:
 			cq.signal.L.Lock()
 
-			for cq.c == nil {
+			for cq.c.Load() == nil {
 				cq.signal.Wait()
 			}
 
@@ -43,15 +45,11 @@ func (cq *ConsumerQueue) listenForMessages() {
 }
 
 func (cq *ConsumerQueue) processMessage(msg Message) {
-
 	select {
 	case <-cq.quit:
 		return
 	default:
-		cq.mu.Lock()
-		err := cq.c.Consume(msg)
-		cq.mu.Unlock()
-
+		err := (cq.c.Load().(Consumer)).Consume(msg)
 		if err != nil {
 			cq.q.EnqueueFront(&msg)
 			log.Println("consumer error:", err)
@@ -72,12 +70,16 @@ func (cq *ConsumerQueue) ack(msgId uuid.UUID) {
 
 func NewConsumerQueue(c Consumer) *ConsumerQueue {
 	cq := ConsumerQueue{
-		c:      c,
+		c:      atomic.Value{},
 		q:      NewQueue(),
 		quit:   make(chan struct{}),
 		mu:     &sync.Mutex{},
 		muMsg:  &sync.Mutex{},
 		signal: sync.NewCond(&sync.Mutex{}),
+	}
+
+	if c != nil {
+		cq.c.Store(c)
 	}
 
 	go cq.listenForMessages()
@@ -126,14 +128,10 @@ func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 		return
 	}
 
-	if cons.c == nil {
-		cons.mu.Lock()
-		// races
-		cons.c = c
+	if cons.c.Load() == nil {
+		cons.c.Store(c)
 		e.consumers[topic] = cons
 		cons.signal.Broadcast()
-
-		cons.mu.Unlock()
 	}
 }
 
