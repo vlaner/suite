@@ -13,6 +13,7 @@ type ConsumerQueue struct {
 	unackedMsgs []Message
 	quit        chan struct{}
 	mu          *sync.Mutex
+	muMsg       *sync.Mutex
 	signal      *sync.Cond
 }
 
@@ -22,27 +23,35 @@ func (cq *ConsumerQueue) listenForMessages() {
 		case <-cq.quit:
 			return
 		default:
-			cq.mu.Lock()
+			cq.signal.L.Lock()
 
 			for cq.c == nil {
 				cq.signal.Wait()
 			}
 
 			message := cq.q.Dequeue()
+
+			cq.muMsg.Lock()
 			cq.unackedMsgs = append(cq.unackedMsgs, *message)
+			cq.muMsg.Unlock()
+
 			cq.processMessage(*message)
 
-			cq.mu.Unlock()
+			cq.signal.L.Unlock()
 		}
 	}
 }
 
 func (cq *ConsumerQueue) processMessage(msg Message) {
+
 	select {
 	case <-cq.quit:
 		return
 	default:
+		cq.mu.Lock()
 		err := cq.c.Consume(msg)
+		cq.mu.Unlock()
+
 		if err != nil {
 			cq.q.EnqueueFront(&msg)
 			log.Println("consumer error:", err)
@@ -51,6 +60,9 @@ func (cq *ConsumerQueue) processMessage(msg Message) {
 }
 
 func (cq *ConsumerQueue) ack(msgId uuid.UUID) {
+	cq.muMsg.Lock()
+	defer cq.muMsg.Unlock()
+
 	for i, msg := range cq.unackedMsgs {
 		if msg.Id == msgId {
 			cq.unackedMsgs = append(cq.unackedMsgs[:i], cq.unackedMsgs[i+1:]...)
@@ -59,13 +71,13 @@ func (cq *ConsumerQueue) ack(msgId uuid.UUID) {
 }
 
 func NewConsumerQueue(c Consumer) *ConsumerQueue {
-	mu := &sync.Mutex{}
 	cq := ConsumerQueue{
 		c:      c,
 		q:      NewQueue(),
 		quit:   make(chan struct{}),
-		mu:     mu,
-		signal: sync.NewCond(mu),
+		mu:     &sync.Mutex{},
+		muMsg:  &sync.Mutex{},
+		signal: sync.NewCond(&sync.Mutex{}),
 	}
 
 	go cq.listenForMessages()
@@ -113,10 +125,15 @@ func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 		cq.signal.Broadcast()
 		return
 	}
+
 	if cons.c == nil {
+		cons.mu.Lock()
+		// races
 		cons.c = c
 		e.consumers[topic] = cons
 		cons.signal.Broadcast()
+
+		cons.mu.Unlock()
 	}
 }
 
@@ -158,6 +175,9 @@ func (e *Exchange) Ack(topic Topic, msgId uuid.UUID) {
 }
 
 func (e *Exchange) GetUnackedMessages(topic Topic) []Message {
+	e.sync.Lock()
+	defer e.sync.Unlock()
+
 	c := e.consumers[topic]
 	return c.unackedMsgs
 }

@@ -3,6 +3,7 @@ package broker
 import (
 	"bytes"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -145,4 +146,49 @@ func TestExchangeAcksMessage(t *testing.T) {
 	if len(e.consumers[topic].unackedMsgs) != 0 {
 		t.Error("wrong unacked messages count")
 	}
+}
+
+func TestExchangeWithGoroutinesDataRace(t *testing.T) {
+	wg := sync.WaitGroup{}
+	e := NewExchange()
+
+	c := newTestConsumer(e)
+	c1 := newTestConsumer(e)
+	c2 := newTestConsumer(e)
+	c3 := newTestConsumer(e)
+	topic := Topic("test")
+	topic1 := Topic("test")
+	topic2 := Topic("test")
+	topic3 := Topic("test")
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.Subscribe(topic, c)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.Subscribe(topic1, c1)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.Subscribe(topic2, c2)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		e.Subscribe(topic3, c3)
+	}()
+
+	go e.Publish(topic, []byte("testdata"))
+	go e.Publish(topic1, []byte("testdata"))
+	go e.Publish(topic2, []byte("testdata"))
+	go e.Publish(topic3, []byte("testdata"))
+
+	wg.Wait()
 }
