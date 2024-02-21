@@ -8,11 +8,12 @@ import (
 )
 
 type ConsumerQueue struct {
-	c      Consumer
-	q      *Queue
-	quit   chan struct{}
-	mu     *sync.Mutex
-	signal *sync.Cond
+	c           Consumer
+	q           *Queue
+	unackedMsgs []Message
+	quit        chan struct{}
+	mu          *sync.Mutex
+	signal      *sync.Cond
 }
 
 func (cq *ConsumerQueue) listenForMessages() {
@@ -28,6 +29,7 @@ func (cq *ConsumerQueue) listenForMessages() {
 			}
 
 			message := cq.q.Dequeue()
+			cq.unackedMsgs = append(cq.unackedMsgs, *message)
 			cq.processMessage(*message)
 
 			cq.mu.Unlock()
@@ -45,6 +47,14 @@ func (cq *ConsumerQueue) processMessage(msg Message) {
 		if err != nil {
 			cq.q.EnqueueFront(&msg)
 			log.Println("consumer error:", err)
+		}
+	}
+}
+
+func (cq *ConsumerQueue) ack(msgId uuid.UUID) {
+	for i, msg := range cq.unackedMsgs {
+		if msg.Id == msgId {
+			cq.unackedMsgs = append(cq.unackedMsgs[:i], cq.unackedMsgs[i+1:]...)
 		}
 	}
 }
@@ -131,4 +141,24 @@ func (e *Exchange) Publish(topic Topic, data []byte) {
 
 		c.q.Enqueue(message)
 	}
+}
+
+func (e *Exchange) Ack(topic Topic, msgId uuid.UUID) {
+	e.sync.Lock()
+	defer e.sync.Unlock()
+
+	select {
+	case <-e.quit:
+		return
+	default:
+		c := e.consumers[topic]
+		if c != nil {
+			c.ack(msgId)
+		}
+	}
+}
+
+func (e *Exchange) GetUnackedMessages(topic Topic) []Message {
+	c := e.consumers[topic]
+	return c.unackedMsgs
 }

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vlaner/suite/broker"
 	"github.com/vlaner/suite/database"
 	"github.com/vlaner/suite/protocol"
@@ -133,6 +134,13 @@ ReadLoop:
 				c := s.getClientById(id)
 				topic := protoVal.Array[1].Str
 				c.Publish(broker.Topic(topic), []byte(protoVal.Array[2].Str))
+			}
+
+			if command.Str == "ack" {
+				c := s.getClientById(id)
+				topic := protoVal.Array[1].Str
+				msgId := protoVal.Array[2].Str
+				c.Ack(broker.Topic(topic), uuid.MustParse(msgId))
 			}
 
 			if command.Str == "get" {

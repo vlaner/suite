@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/vlaner/suite/broker"
 	"github.com/vlaner/suite/database"
@@ -36,7 +37,6 @@ func (tc *testClient) waitForMessages(t *testing.T, amount int) {
 			t.Errorf("error parsing input: %s", err)
 		}
 		tc.msgCh <- *protoVal
-
 	}
 
 	close(tc.msgCh)
@@ -225,6 +225,64 @@ func TestServerClientReceivesPayloadInOrder(t *testing.T) {
 		if !bytes.Equal([]byte(gotData.Array[5].Str), want) {
 			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), gotData.Array[5].Str)
 		}
+	}
+}
+
+func TestServerClientAckMessage(t *testing.T) {
+	e := broker.NewExchange()
+
+	topic := broker.Topic("TESTTOPIC")
+
+	srv := NewTcpServer(SERVER_ADDR, e, nil)
+
+	srv.Start()
+	defer srv.Stop()
+
+	c, err := newTestClient(SERVER_ADDR)
+	if err != nil {
+		t.Errorf("error connecting to server: %s", err)
+	}
+	defer c.Stop()
+
+	w := protocol.NewProtoWriter(c.conn)
+	err = w.Write(protocol.Value{
+		ValType: protocol.ARRAY,
+		Str:     "",
+		Array: []protocol.Value{
+			{ValType: protocol.BINARY_STRING, Str: "consume"},
+			{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+		},
+	})
+	if err != nil {
+		t.Errorf("error writing protocol data: %s", err)
+	}
+
+	msgsCount := 50
+	for i := 0; i < msgsCount; i++ {
+		e.Publish(topic, append([]byte("message #"), intToBytes(i)...))
+	}
+
+	go c.waitForMessages(t, msgsCount)
+	for gotData := range c.msgCh {
+		msgId := gotData.Array[3]
+
+		err = w.Write(protocol.Value{
+			ValType: protocol.ARRAY,
+			Str:     "",
+			Array: []protocol.Value{
+				{ValType: protocol.BINARY_STRING, Str: "ack"},
+				{ValType: protocol.BINARY_STRING, Str: "TESTTOPIC"},
+				{ValType: protocol.BINARY_STRING, Str: msgId.Str},
+			},
+		})
+		if err != nil {
+			t.Errorf("error writing protocol data: %s", err)
+		}
+	}
+	time.Sleep(10 * time.Millisecond)
+	unacked := len(e.GetUnackedMessages(topic))
+	if unacked != 0 {
+		t.Error("got more than 0 unacked messages:", unacked)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 
+	"github.com/google/uuid"
 	"github.com/vlaner/suite/broker"
 	"github.com/vlaner/suite/protocol"
 )
@@ -72,5 +73,11 @@ func (c Client) Consume(msg broker.Message) error {
 func (c Client) Publish(topic broker.Topic, data []byte) {
 	if c.kind == PRODUCER {
 		c.e.Publish(topic, data)
+	}
+}
+
+func (c Client) Ack(topic broker.Topic, msgId uuid.UUID) {
+	if c.kind == CONSUMER {
+		c.e.Ack(topic, msgId)
 	}
 }

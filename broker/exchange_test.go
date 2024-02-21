@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strconv"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func intToBytes(i int) []byte {
@@ -11,40 +13,47 @@ func intToBytes(i int) []byte {
 }
 
 type testConsumer struct {
-	gotMsgs chan []byte
+	gotMsgs chan Message
+	e       *Exchange
 }
 
-func newTestConsumer() *testConsumer {
+func newTestConsumer(e *Exchange) *testConsumer {
 	return &testConsumer{
-		gotMsgs: make(chan []byte),
+		gotMsgs: make(chan Message),
+		e:       e,
 	}
 }
 
 func (c testConsumer) Consume(msg Message) error {
-	c.gotMsgs <- msg.Data
+	c.gotMsgs <- msg
 	return nil
 }
 
+func (c testConsumer) Ack(topic Topic, msgId uuid.UUID) {
+	c.e.Ack(topic, msgId)
+}
+
 func TestBasicConsume(t *testing.T) {
-	c := newTestConsumer()
-	topic := Topic("test")
 	e := NewExchange()
+
+	c := newTestConsumer(e)
+	topic := Topic("test")
 
 	e.Subscribe(topic, c)
 
 	e.Publish(topic, []byte("testdata"))
 
 	gotData := <-c.gotMsgs
-	if !bytes.Equal(gotData, []byte("testdata")) {
-		t.Errorf("consumer got unexpected data: want 'testdata' got %s", string(gotData))
+	if !bytes.Equal(gotData.Data, []byte("testdata")) {
+		t.Errorf("consumer got unexpected data: want 'testdata' got %s", string(gotData.Data))
 	}
 }
 
 func TestSeveralMessages(t *testing.T) {
-	c := newTestConsumer()
-
 	topic := Topic("test")
 	e := NewExchange()
+
+	c := newTestConsumer(e)
 
 	e.Subscribe(topic, c)
 
@@ -56,8 +65,8 @@ func TestSeveralMessages(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		gotData := <-c.gotMsgs
 		want := append([]byte("testdata"), intToBytes(i)...)
-		if !bytes.Equal(gotData, want) {
-			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), string(gotData))
+		if !bytes.Equal(gotData.Data, want) {
+			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), string(gotData.Data))
 		}
 	}
 }
@@ -66,7 +75,7 @@ func TestExchangeWithProducer(t *testing.T) {
 	topic := Topic("test")
 	e := NewExchange()
 
-	c := newTestConsumer()
+	c := newTestConsumer(e)
 	p := PayloadProducer{e: e}
 
 	e.Subscribe(topic, c)
@@ -79,17 +88,17 @@ func TestExchangeWithProducer(t *testing.T) {
 	for i := 0; i < 30; i++ {
 		gotData := <-c.gotMsgs
 		want := append([]byte("testdata"), intToBytes(i)...)
-		if !bytes.Equal(gotData, want) {
-			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), string(gotData))
+		if !bytes.Equal(gotData.Data, want) {
+			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), string(gotData.Data))
 		}
 	}
 }
 
 func TestExchangeStopWorks(t *testing.T) {
-	c := newTestConsumer()
-
 	topic := Topic("test")
 	e := NewExchange()
+
+	c := newTestConsumer(e)
 
 	e.Subscribe(topic, c)
 
@@ -99,19 +108,41 @@ func TestExchangeStopWorks(t *testing.T) {
 }
 
 func TestExchangeSubscibeSecondCosnumerShouldNotWork(t *testing.T) {
-	c := newTestConsumer()
-	c2 := newTestConsumer()
+	e := NewExchange()
+
+	c := newTestConsumer(e)
+	c2 := newTestConsumer(e)
 	go func() {
 		<-c2.gotMsgs
 		t.Errorf("receiving message should not happen")
 	}()
 
 	topic := Topic("test")
-	e := NewExchange()
 
 	e.Subscribe(topic, c)
 	e.Subscribe(topic, c2)
 
 	e.Publish(topic, []byte("testdata"))
 	<-c.gotMsgs
+}
+
+func TestExchangeAcksMessage(t *testing.T) {
+	e := NewExchange()
+
+	c := newTestConsumer(e)
+	topic := Topic("test")
+
+	e.Subscribe(topic, c)
+	e.Publish(topic, []byte("testdata"))
+
+	gotMsg := <-c.gotMsgs
+	if len(e.consumers[topic].unackedMsgs) != 1 {
+		t.Error("wrong unacked messages count")
+	}
+
+	c.Ack(topic, gotMsg.Id)
+
+	if len(e.consumers[topic].unackedMsgs) != 0 {
+		t.Error("wrong unacked messages count")
+	}
 }
