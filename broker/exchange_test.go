@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -14,30 +15,31 @@ func intToBytes(i int) []byte {
 }
 
 type testConsumer struct {
+	id      uuid.UUID
 	gotMsgs chan Message
 	e       *Exchange
 }
 
-func newTestConsumer(e *Exchange) *testConsumer {
+func newTestConsumer(id uuid.UUID, e *Exchange) *testConsumer {
 	return &testConsumer{
-		gotMsgs: make(chan Message),
+		id:      id,
+		gotMsgs: make(chan Message, 1),
 		e:       e,
 	}
 }
 
-func (c testConsumer) Consume(msg Message) error {
-	c.gotMsgs <- msg
-	return nil
+func (c testConsumer) Chan() chan Message {
+	return c.gotMsgs
 }
 
-func (c testConsumer) Ack(topic Topic, msgId uuid.UUID) {
-	c.e.Ack(topic, msgId)
+func (c testConsumer) ID() uuid.UUID {
+	return c.id
 }
 
 func TestBasicConsume(t *testing.T) {
 	e := NewExchange()
 
-	c := newTestConsumer(e)
+	c := newTestConsumer(uuid.New(), e)
 	topic := Topic("test")
 
 	e.Subscribe(topic, c)
@@ -54,14 +56,16 @@ func TestSeveralMessages(t *testing.T) {
 	topic := Topic("test")
 	e := NewExchange()
 
-	c := newTestConsumer(e)
+	c := newTestConsumer(uuid.New(), e)
 
 	e.Subscribe(topic, c)
 
-	for i := 0; i < 30; i++ {
-		payloadBytes := append([]byte("testdata"), intToBytes(i)...)
-		e.Publish(topic, payloadBytes)
-	}
+	go func() {
+		for i := 0; i < 30; i++ {
+			payloadBytes := append([]byte("testdata"), intToBytes(i)...)
+			e.Publish(topic, payloadBytes)
+		}
+	}()
 
 	for i := 0; i < 30; i++ {
 		gotData := <-c.gotMsgs
@@ -76,15 +80,17 @@ func TestExchangeWithProducer(t *testing.T) {
 	topic := Topic("test")
 	e := NewExchange()
 
-	c := newTestConsumer(e)
+	c := newTestConsumer(uuid.New(), e)
 	p := PayloadProducer{e: e}
 
 	e.Subscribe(topic, c)
 
-	for i := 0; i < 30; i++ {
-		payloadBytes := append([]byte("testdata"), intToBytes(i)...)
-		p.Publish(topic, payloadBytes)
-	}
+	go func() {
+		for i := 0; i < 30; i++ {
+			payloadBytes := append([]byte("testdata"), intToBytes(i)...)
+			p.Publish(topic, payloadBytes)
+		}
+	}()
 
 	for i := 0; i < 30; i++ {
 		gotData := <-c.gotMsgs
@@ -99,7 +105,7 @@ func TestExchangeStopWorks(t *testing.T) {
 	topic := Topic("test")
 	e := NewExchange()
 
-	c := newTestConsumer(e)
+	c := newTestConsumer(uuid.New(), e)
 
 	e.Subscribe(topic, c)
 
@@ -108,15 +114,11 @@ func TestExchangeStopWorks(t *testing.T) {
 	e.Publish(topic, []byte("testdata"))
 }
 
-func TestExchangeSubscibeSecondCosnumerShouldNotWork(t *testing.T) {
+func TestExchangeSubscribeMultipleConsumers(t *testing.T) {
 	e := NewExchange()
 
-	c := newTestConsumer(e)
-	c2 := newTestConsumer(e)
-	go func() {
-		<-c2.gotMsgs
-		t.Errorf("receiving message should not happen")
-	}()
+	c := newTestConsumer(uuid.New(), e)
+	c2 := newTestConsumer(uuid.New(), e)
 
 	topic := Topic("test")
 
@@ -124,38 +126,18 @@ func TestExchangeSubscibeSecondCosnumerShouldNotWork(t *testing.T) {
 	e.Subscribe(topic, c2)
 
 	e.Publish(topic, []byte("testdata"))
-	<-c.gotMsgs
-}
 
-func TestExchangeAcksMessage(t *testing.T) {
-	e := NewExchange()
-
-	c := newTestConsumer(e)
-	topic := Topic("test")
-
-	e.Subscribe(topic, c)
-	e.Publish(topic, []byte("testdata"))
-
-	gotMsg := <-c.gotMsgs
-	if len(e.consumers[topic].unackedMsgs) != 1 {
-		t.Error("wrong unacked messages count")
-	}
-
-	c.Ack(topic, gotMsg.Id)
-
-	if len(e.consumers[topic].unackedMsgs) != 0 {
-		t.Error("wrong unacked messages count")
-	}
+	t.Log("first msg:", <-c.Chan(), "second msg:", <-c2.Chan())
 }
 
 func TestExchangeWithGoroutinesDataRace(t *testing.T) {
 	wg := sync.WaitGroup{}
 	e := NewExchange()
 
-	c := newTestConsumer(e)
-	c1 := newTestConsumer(e)
-	c2 := newTestConsumer(e)
-	c3 := newTestConsumer(e)
+	c := newTestConsumer(uuid.New(), e)
+	c1 := newTestConsumer(uuid.New(), e)
+	c2 := newTestConsumer(uuid.New(), e)
+	c3 := newTestConsumer(uuid.New(), e)
 	topic := Topic("test")
 	topic1 := Topic("test")
 	topic2 := Topic("test")
@@ -185,49 +167,38 @@ func TestExchangeWithGoroutinesDataRace(t *testing.T) {
 		e.Subscribe(topic3, c3)
 	}()
 
+	wg.Wait()
+
 	go e.Publish(topic, []byte("testdata"))
 	go e.Publish(topic1, []byte("testdata"))
 	go e.Publish(topic2, []byte("testdata"))
 	go e.Publish(topic3, []byte("testdata"))
 
-	wg.Wait()
+	time.Sleep(1 * time.Second)
+
 }
 
 func TestExchangeUnsubscibe(t *testing.T) {
 	e := NewExchange()
 
-	c := newTestConsumer(e)
+	c := newTestConsumer(uuid.New(), e)
 	topic := Topic("test")
 
 	e.Subscribe(topic, c)
 	e.Publish(topic, []byte("testdata"))
-	<-c.gotMsgs
 
-	e.Unsubscribe(topic)
+	t.Log("GOT BEFORE UNSUBSCRIBE", <-c.Chan())
+
+	e.Unsubscribe(topic, c)
 	e.Publish(topic, []byte("testdata1"))
 	e.Publish(topic, []byte("testdata2"))
 	e.Publish(topic, []byte("testdata3"))
 
-	if e.consumers[topic].c.Load() != nil {
-		t.Errorf("consumer must be nil after unsubscribe")
-	}
-
 	go func() {
-		select {
-		case <-c.gotMsgs:
-			t.Error("should be blocked")
-		default:
-			return
+		for range c.gotMsgs {
+			t.Error("should be blocked but got message instead")
 		}
 	}()
 
-	e.Subscribe(topic, c)
-
-	for i := 1; i <= 3; i++ {
-		gotData := <-c.gotMsgs
-		want := append([]byte("testdata"), intToBytes(i)...)
-		if !bytes.Equal(gotData.Data, want) {
-			t.Errorf("consumer got unexpected data: want '%s' got '%s'", string(want), string(gotData.Data))
-		}
-	}
+	time.Sleep(1 * time.Second)
 }

@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/vlaner/suite/broker"
@@ -14,26 +13,24 @@ import (
 )
 
 type TcpServer struct {
-	addr      string
-	l         net.Listener
-	wg        sync.WaitGroup
-	quit      chan interface{}
-	clients   map[net.Conn]*Client
-	mu        sync.RWMutex
-	exchange  *broker.Exchange
-	database  *database.Database
-	clientIds int
+	addr     string
+	l        net.Listener
+	wg       sync.WaitGroup
+	quit     chan interface{}
+	clients  map[net.Conn]*Client
+	mu       sync.RWMutex
+	exchange *broker.Exchange
+	database *database.Database
 }
 
 func NewTcpServer(addr string, exchange *broker.Exchange, db *database.Database) *TcpServer {
 	return &TcpServer{
-		addr:      addr,
-		wg:        sync.WaitGroup{},
-		quit:      make(chan interface{}),
-		clients:   make(map[net.Conn]*Client),
-		exchange:  exchange,
-		database:  db,
-		clientIds: 0,
+		addr:     addr,
+		wg:       sync.WaitGroup{},
+		quit:     make(chan interface{}),
+		clients:  make(map[net.Conn]*Client),
+		exchange: exchange,
+		database: db,
 	}
 }
 
@@ -71,21 +68,22 @@ func (s *TcpServer) acceptLoop() {
 			}
 			continue
 		}
-		s.clientIds++
-		client := NewClient(s.clientIds, conn, s.exchange)
+		client := NewClient(uuid.New(), conn, s.exchange)
+
 		s.mu.Lock()
 		s.clients[conn] = client
 		s.mu.Unlock()
 
 		s.wg.Add(1)
+
 		go func() {
-			s.handleConn(conn, s.clientIds)
+			s.handleConn(conn, client.id)
 			defer s.wg.Done()
 		}()
 	}
 }
 
-func (s *TcpServer) handleConn(conn net.Conn, id int) {
+func (s *TcpServer) handleConn(conn net.Conn, id uuid.UUID) {
 	defer func() {
 		conn.Close()
 		s.mu.Lock()
@@ -101,7 +99,6 @@ ReadLoop:
 		case <-s.quit:
 			return
 		default:
-			conn.SetDeadline(time.Now().Add(200 * time.Millisecond))
 			protoVal, err := r.ParseInput()
 			if err != nil {
 				if opErr, ok := err.(*net.OpError); ok && opErr.Timeout() {
@@ -115,19 +112,13 @@ ReadLoop:
 				return
 			}
 
-			log.Printf("received from %v: %+v, ID: %d", conn.RemoteAddr(), protoVal, id)
+			log.Printf("received from %v: %v, ID: %s", conn.RemoteAddr(), protoVal, id)
 
 			command := protoVal.Array[0]
 			if command.Str == "consume" {
 				c := s.getClientById(id)
-				c.makeConsumer()
 				topic := protoVal.Array[1].Str
 				s.exchange.Subscribe(broker.Topic(topic), c)
-			}
-
-			if command.Str == "producer" {
-				c := s.getClientById(id)
-				c.makeProducer()
 			}
 
 			if command.Str == "publish" {
@@ -136,12 +127,12 @@ ReadLoop:
 				c.Publish(broker.Topic(topic), []byte(protoVal.Array[2].Str))
 			}
 
-			if command.Str == "ack" {
-				c := s.getClientById(id)
-				topic := protoVal.Array[1].Str
-				msgId := protoVal.Array[2].Str
-				c.Ack(broker.Topic(topic), uuid.MustParse(msgId))
-			}
+			// if command.Str == "ack" {
+			// 	c := s.getClientById(id)
+			// 	topic := protoVal.Array[1].Str
+			// 	msgId := protoVal.Array[2].Str
+			// 	c.Ack(broker.Topic(topic), uuid.MustParse(msgId))
+			// }
 
 			if command.Str == "unsub" {
 				c := s.getClientById(id)
@@ -172,7 +163,6 @@ ReadLoop:
 			if command.Str == "set" {
 				key := protoVal.Array[1].Str
 				value := protoVal.Array[2].Str
-
 				err := s.database.Set([]byte(key), []byte(value))
 				if err != nil {
 					if err := w.Write(protocol.Value{ValType: protocol.ERROR, Str: "cannot set key"}); err != nil {
@@ -199,7 +189,7 @@ ReadLoop:
 	}
 }
 
-func (s *TcpServer) getClientById(id int) *Client {
+func (s *TcpServer) getClientById(id uuid.UUID) *Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

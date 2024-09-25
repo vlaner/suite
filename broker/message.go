@@ -8,8 +8,8 @@ type Message struct {
 	Data  []byte
 }
 
-func newMessage(id uuid.UUID, topic Topic, data []byte) *Message {
-	return &Message{
+func newMessage(id uuid.UUID, topic Topic, data []byte) Message {
+	return Message{
 		Id:    id,
 		Topic: topic,
 		Data:  data,

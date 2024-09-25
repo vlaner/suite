@@ -1,100 +1,20 @@
 package broker
 
 import (
-	"log"
 	"sync"
-	"sync/atomic"
 
 	"github.com/google/uuid"
 )
 
-type ConsumerQueue struct {
-	// c - 'Consumer' interface
-	c           atomic.Pointer[Consumer]
-	q           *Queue
-	unackedMsgs []Message
-	quit        chan struct{}
-	mu          *sync.Mutex
-	muMsg       *sync.Mutex
-	signal      *sync.Cond
-}
-
-func (cq *ConsumerQueue) listenForMessages() {
-	for {
-		select {
-		case <-cq.quit:
-			return
-		default:
-			cq.signal.L.Lock()
-
-			for cq.c.Load() == nil {
-				cq.signal.Wait()
-			}
-
-			message := cq.q.Dequeue()
-
-			cq.muMsg.Lock()
-			cq.unackedMsgs = append(cq.unackedMsgs, *message)
-			cq.muMsg.Unlock()
-
-			cq.processMessage(*message)
-
-			cq.signal.L.Unlock()
-		}
-	}
-}
-
-func (cq *ConsumerQueue) processMessage(msg Message) {
-	select {
-	case <-cq.quit:
-		return
-	default:
-		c := cq.c.Load()
-		if c == nil {
-			cq.q.EnqueueFront(&msg)
-			return
-		}
-		err := (*c).Consume(msg)
-		if err != nil {
-			log.Println("consumer error:", err)
-		}
-	}
-}
-
-func (cq *ConsumerQueue) ack(msgId uuid.UUID) {
-	cq.muMsg.Lock()
-	defer cq.muMsg.Unlock()
-
-	for i, msg := range cq.unackedMsgs {
-		if msg.Id == msgId {
-			cq.unackedMsgs = append(cq.unackedMsgs[:i], cq.unackedMsgs[i+1:]...)
-		}
-	}
-}
-
-func NewConsumerQueue(c Consumer) *ConsumerQueue {
-	cq := ConsumerQueue{
-		c:      atomic.Pointer[Consumer]{},
-		q:      NewQueue(),
-		quit:   make(chan struct{}),
-		mu:     &sync.Mutex{},
-		muMsg:  &sync.Mutex{},
-		signal: sync.NewCond(&sync.Mutex{}),
-	}
-
-	if c != nil {
-		cq.c.Store(&c)
-	}
-
-	go cq.listenForMessages()
-
-	return &cq
+type Consumer interface {
+	ID() uuid.UUID
+	Chan() chan Message
 }
 
 type Topic string
 
 type Exchange struct {
-	consumers map[Topic]*ConsumerQueue
+	consumers map[Topic][]Consumer
 	wg        sync.WaitGroup
 	sync      sync.Mutex
 	quit      chan struct{}
@@ -102,7 +22,7 @@ type Exchange struct {
 
 func NewExchange() *Exchange {
 	return &Exchange{
-		consumers: map[Topic]*ConsumerQueue{},
+		consumers: make(map[Topic][]Consumer),
 		wg:        sync.WaitGroup{},
 		quit:      make(chan struct{}),
 	}
@@ -110,13 +30,6 @@ func NewExchange() *Exchange {
 
 func (e *Exchange) Stop() {
 	close(e.quit)
-	e.sync.Lock()
-	defer e.sync.Unlock()
-
-	for _, c := range e.consumers {
-		c.quit <- struct{}{}
-	}
-
 	e.wg.Wait()
 }
 
@@ -124,74 +37,48 @@ func (e *Exchange) Subscribe(topic Topic, c Consumer) {
 	e.sync.Lock()
 	defer e.sync.Unlock()
 
-	cons, exists := e.consumers[topic]
+	_, exists := e.consumers[topic]
 	if !exists {
-		cq := NewConsumerQueue(c)
-		e.consumers[topic] = cq
-		cq.signal.Broadcast()
-		return
+		e.consumers[topic] = []Consumer{}
 	}
 
-	if cons.c.Load() == nil {
-		cons.c.Store(&c)
-		e.consumers[topic] = cons
-		cons.signal.Broadcast()
-	}
+	e.consumers[topic] = append(e.consumers[topic], c)
 }
 
-func (e *Exchange) Unsubscribe(topic Topic) {
+func (e *Exchange) Unsubscribe(topic Topic, c Consumer) {
 	e.sync.Lock()
 	defer e.sync.Unlock()
 
-	cons, exists := e.consumers[topic]
+	consumers, exists := e.consumers[topic]
 	if !exists {
 		return
 	}
 
-	cons.c.Store(nil)
+	for i, cons := range consumers {
+		if c.ID() == cons.ID() {
+			consumers = append(consumers[:i], consumers[i+1:]...)
+			break
+		}
+	}
+
+	e.consumers[topic] = consumers
 }
 
 func (e *Exchange) Publish(topic Topic, data []byte) {
 	e.sync.Lock()
 	defer e.sync.Unlock()
-
 	select {
 	case <-e.quit:
 		return
 	default:
-		message := newMessage(uuid.New(), topic, data)
-
-		c, exists := e.consumers[topic]
+		msg := newMessage(uuid.New(), topic, data)
+		_, exists := e.consumers[topic]
 		if !exists {
-			cq := NewConsumerQueue(nil)
-			e.consumers[topic] = cq
-			cq.q.Enqueue(message)
 			return
 		}
 
-		c.q.Enqueue(message)
-	}
-}
-
-func (e *Exchange) Ack(topic Topic, msgId uuid.UUID) {
-	e.sync.Lock()
-	defer e.sync.Unlock()
-
-	select {
-	case <-e.quit:
-		return
-	default:
-		c := e.consumers[topic]
-		if c != nil {
-			c.ack(msgId)
+		for _, consumer := range e.consumers[topic] {
+			consumer.Chan() <- msg
 		}
 	}
-}
-
-func (e *Exchange) GetUnackedMessages(topic Topic) []Message {
-	e.sync.Lock()
-	defer e.sync.Unlock()
-
-	c := e.consumers[topic]
-	return c.unackedMsgs
 }

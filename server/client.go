@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"log"
 	"net"
 
@@ -10,47 +9,30 @@ import (
 	"github.com/vlaner/suite/protocol"
 )
 
-// client kind
-const (
-	UNASSIGNED = -1
-	PRODUCER   = 0
-	CONSUMER   = 1
-)
-
 type Client struct {
-	id   int
+	id   uuid.UUID
 	conn net.Conn
-	kind int
 	e    *broker.Exchange
 	w    *protocol.Writer
+	ch   chan broker.Message
 }
 
-func NewClient(id int, conn net.Conn, e *broker.Exchange) *Client {
+func NewClient(id uuid.UUID, conn net.Conn, e *broker.Exchange) *Client {
 	client := Client{
 		id:   id,
 		conn: conn,
-		kind: UNASSIGNED,
 		e:    e,
 		w:    protocol.NewProtoWriter(conn),
+		ch:   make(chan broker.Message),
 	}
+
+	go client.startConsuming()
 
 	return &client
 }
 
-func (c *Client) makeProducer() {
-	if c.kind == UNASSIGNED {
-		c.kind = PRODUCER
-	}
-}
-
-func (c *Client) makeConsumer() {
-	if c.kind == UNASSIGNED {
-		c.kind = CONSUMER
-	}
-}
-
-func (c Client) Consume(msg broker.Message) error {
-	if c.kind == CONSUMER {
+func (c Client) startConsuming() {
+	for msg := range c.ch {
 		err := c.w.Write(
 			protocol.Value{ValType: protocol.ARRAY, Array: []protocol.Value{
 				{ValType: protocol.BINARY_STRING, Str: "realm"},
@@ -62,27 +44,22 @@ func (c Client) Consume(msg broker.Message) error {
 			}})
 		if err != nil {
 			log.Printf("error writing payload bytes to %d: %s\n", c.id, err)
-			return fmt.Errorf("error consuming message: %w", err)
 		}
 	}
+}
 
-	return nil
+func (c Client) Chan() chan broker.Message {
+	return c.ch
+}
+
+func (c Client) ID() uuid.UUID {
+	return c.id
 }
 
 func (c Client) Publish(topic broker.Topic, data []byte) {
-	if c.kind == PRODUCER {
-		c.e.Publish(topic, data)
-	}
-}
-
-func (c Client) Ack(topic broker.Topic, msgId uuid.UUID) {
-	if c.kind == CONSUMER {
-		c.e.Ack(topic, msgId)
-	}
+	c.e.Publish(topic, data)
 }
 
 func (c Client) Unsubscribe(topic broker.Topic) {
-	if c.kind == CONSUMER {
-		c.e.Unsubscribe(topic)
-	}
+	c.e.Unsubscribe(topic, c)
 }
